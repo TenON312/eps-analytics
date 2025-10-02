@@ -1,3 +1,4 @@
+// src/pages/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { BarChart3, Package, CreditCard, Calendar, PlusCircle, Users, RefreshCw, Bell, TrendingUp, Download, Trophy, Target, Crown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -489,7 +490,6 @@ const Dashboard = ({ userData }) => {
   return (
     <div className="min-h-screen bg-gray-900 p-4">
       <div className="max-w-7xl mx-auto">
-        {/* Упрощенный заголовок */}
         <div className="mb-8">
           <div className="flex justify-between items-center mb-6">
             <div>
@@ -504,7 +504,6 @@ const Dashboard = ({ userData }) => {
               </p>
             </div>
             
-            {/* Кнопки действий - упрощенные */}
             <div className="flex items-center space-x-3">
               <button
                 onClick={handleExport}
@@ -531,8 +530,8 @@ const Dashboard = ({ userData }) => {
           </div>
         )}
 
-        {/* КАРТОЧКИ ПРОГРЕССА - ГОРИЗОНТАЛЬНО */}
-        <div className="flex flex-col md:flex-row gap-6 mb-8">
+        {/* 🔥 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Карточки прогресса горизонтально */}
+        <div className="dashboard-progress-cards">
           {['revenue', 'focus', 'sbp'].map((type, index) => {
             const data = dashboardData[type];
             const icons = [BarChart3, Package, CreditCard];
@@ -540,21 +539,19 @@ const Dashboard = ({ userData }) => {
             const Icon = icons[index];
             
             return (
-              <div key={type} className="flex-1">
-                <div className="card p-6 bg-gray-800 rounded-xl border border-gray-700 flex flex-col h-full">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-white">{data.title}</h3>
-                    <Icon className={`h-5 w-5 ${colors[index]}`} />
-                  </div>
-                  <div className="flex-grow flex flex-col justify-center">
-                    <ProgressChart data={data} />
-                  </div>
-                  <div className="mt-4 flex justify-between items-center text-sm pt-3 border-t border-gray-600">
-                    <span className="text-gray-400">Осталось:</span>
-                    <span className="text-white font-medium">
-                      {Math.max(0, (data.plan || 0) - (data.fact || 0)).toLocaleString('ru-RU')} ₽
-                    </span>
-                  </div>
+              <div key={type} className="card bg-gray-800 rounded-xl border border-gray-700 flex flex-col h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white">{data.title}</h3>
+                  <Icon className={`h-5 w-5 ${colors[index]}`} />
+                </div>
+                <div className="flex-grow flex flex-col justify-center">
+                  <ProgressChart data={data} />
+                </div>
+                <div className="mt-4 flex justify-between items-center text-sm pt-3 border-t border-gray-600">
+                  <span className="text-gray-400">Осталось:</span>
+                  <span className="text-white font-medium">
+                    {Math.max(0, (data.plan || 0) - (data.fact || 0)).toLocaleString('ru-RU')} ₽
+                  </span>
                 </div>
               </div>
             );
@@ -660,7 +657,6 @@ const Dashboard = ({ userData }) => {
 
         {/* Последние достижения */}
         <RecentAchievements />
-
       </div>
     </div>
   );

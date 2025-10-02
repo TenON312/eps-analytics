@@ -1,3 +1,8 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* 🌌 Глобальные стили */
 :root {
   /* Цветовая палитра */
@@ -413,6 +418,7 @@ button:active::after, .btn:active::after {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
+
 .progress-ring {
   transition: stroke-dashoffset 0.35s;
   transform: rotate(-90deg);
@@ -436,6 +442,7 @@ button:active::after, .btn:active::after {
 .circle-animation {
   animation: circle-appear 1s ease-out forwards;
 }
+
 .input-field {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -470,6 +477,7 @@ button:active::after, .btn:active::after {
   border-color: rgba(139, 92, 246, 0.3);
   transform: translateY(-2px);
 }
+
 .input-field {
   background: rgba(55, 65, 81, 0.8);
   border: 1px solid rgba(75, 85, 99, 0.8);
@@ -508,17 +516,12 @@ button:active::after, .btn:active::after {
 
 /* Улучшенные отступы в навигации */
 .sidebar .space-y-2 > * + * {
-  margin-top: 0.5rem;
-}
-.sidebar .space-y-2 > * + * {
-  margin-top: 0.25rem; /* Adjust this value for vertical spacing */
+  margin-top: 0.25rem;
 }
 
 .sidebar button {
-  min-width: 200px; /* Adjust this value for button width */
+  min-width: 200px;
   width: 100%;
-}
-.sidebar button {
   text-align: left !important;
   justify-content: flex-start !important;
 }
@@ -526,8 +529,33 @@ button:active::after, .btn:active::after {
 .sidebar .space-y-3 > * + * {
   margin-top: 0.75rem !important;
 }
+
 .container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+/* 🔥 КРИТИЧЕСКИ ВАЖНО: Исправление для горизонтального расположения карточек */
+.dashboard-progress-cards {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 1.5rem !important;
+  margin-bottom: 2rem !important;
+}
+
+@media (max-width: 768px) {
+  .dashboard-progress-cards {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+}
+
+/* Принудительное применение grid для карточек прогресса */
+.grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.flex-1 {
+  flex: 1 1 0% !important;
 }
