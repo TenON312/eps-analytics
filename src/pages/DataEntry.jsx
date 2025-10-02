@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Calculator, RotateCcw, ArrowLeft } from 'lucide-react';
+import { Save, Calculator, RotateCcw, ArrowLeft, TrendingUp, CreditCard, Wallet } from 'lucide-react';
 import { dataService } from '../services/dataService';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -132,49 +132,54 @@ const DataEntry = ({ userData }) => {
 
   return (
     <div className="min-h-screen bg-gray-900 p-4">
-      <div className="max-w-md mx-auto">
+      <div className="max-w-2xl mx-auto">
         {/* Кнопка назад */}
         <button 
           onClick={() => navigate('/dashboard')}
-          className="flex items-center text-gray-400 hover:text-white mb-6 transition-colors"
+          className="flex items-center text-gray-400 hover:text-white mb-6 transition-colors group"
         >
-          <ArrowLeft className="h-4 w-4 mr-2" />
+          <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
           Назад к дашборду
         </button>
 
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Внесение данных</h1>
-          <p className="text-gray-400">
-            {new Date().toLocaleDateString('ru-RU', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
-          </p>
+          <div className="bg-gradient-to-r from-purple-600 to-blue-600 inline-block text-transparent bg-clip-text">
+            <p className="text-xl font-semibold">
+              {new Date().toLocaleDateString('ru-RU', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </p>
+          </div>
         </div>
 
         {/* Сводка по сегодняшним данным */}
-        <div className="card p-4 mb-6">
-          <h3 className="text-lg font-semibold text-white mb-3">Сегодня уже внесено:</h3>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div>
-              <div className="text-sm text-gray-400">Фокусные</div>
-              <div className="text-white font-medium">{formatCurrency(todayData.focus)} ₽</div>
+        <div className="card p-6 mb-8 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
+          <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+            <TrendingUp className="h-5 w-5 mr-2 text-green-400" />
+            Сегодня уже внесено:
+          </h3>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="bg-gray-750 rounded-xl p-4 border border-gray-600">
+              <div className="text-sm text-gray-400 mb-1">Фокусные</div>
+              <div className="text-white font-bold text-xl">{formatCurrency(todayData.focus)} ₽</div>
             </div>
-            <div>
-              <div className="text-sm text-gray-400">СБП</div>
-              <div className="text-white font-medium">{formatCurrency(todayData.sbp)} ₽</div>
+            <div className="bg-gray-750 rounded-xl p-4 border border-gray-600">
+              <div className="text-sm text-gray-400 mb-1">СБП</div>
+              <div className="text-white font-bold text-xl">{formatCurrency(todayData.sbp)} ₽</div>
             </div>
-            <div>
-              <div className="text-sm text-gray-400">Наличные</div>
-              <div className="text-white font-medium">{formatCurrency(todayData.cash)} ₽</div>
+            <div className="bg-gray-750 rounded-xl p-4 border border-gray-600">
+              <div className="text-sm text-gray-400 mb-1">Наличные</div>
+              <div className="text-white font-bold text-xl">{formatCurrency(todayData.cash)} ₽</div>
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-gray-600">
+          <div className="mt-4 pt-4 border-t border-gray-700">
             <div className="flex justify-between items-center">
-              <span className="text-gray-300">Общая сумма:</span>
-              <span className="text-xl font-bold text-white">
+              <span className="text-gray-300 font-medium">Общая сумма:</span>
+              <span className="text-2xl font-bold text-white bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
                 {formatCurrency(todayData.focus + todayData.sbp + todayData.cash)} ₽
               </span>
             </div>
@@ -183,90 +188,125 @@ const DataEntry = ({ userData }) => {
 
         {/* Сообщение об ошибке */}
         {error && (
-          <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 mb-4">
-            <p className="text-red-400">{error}</p>
+          <div className="bg-red-500/20 border border-red-500/50 rounded-xl p-4 mb-6 animate-fade-in">
+            <p className="text-red-400 flex items-center">
+              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              {error}
+            </p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="card p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="card p-6 space-y-6 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
           {/* Фокусные товары */}
           <div className="form-group">
-            <label className="form-label">
-              💰 Фокусные товары (рубли)
-            </label>
-            <input
-              type="text"
-              value={formData.focus}
-              onChange={(e) => handleInputChange('focus', e.target.value)}
-              className="input-primary text-lg font-mono"
-              placeholder="0"
-            />
-            {formData.focus && (
-              <div className="mt-2 text-sm text-gray-400">
-                {formatCurrency(formData.focus)} ₽
+            <div className="flex items-center justify-between space-x-4">
+              <label className="form-label flex items-center text-lg font-medium text-white min-w-[200px]">
+                <TrendingUp className="h-5 w-5 mr-3 text-purple-400" />
+                Фокусные товары
+              </label>
+              <div className="flex-1 max-w-[200px]">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.focus}
+                    onChange={(e) => handleInputChange('focus', e.target.value)}
+                    className="input-field text-lg font-mono text-right pr-10 bg-gray-750 border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm">
+                    ₽
+                  </span>
+                </div>
+                {formData.focus && (
+                  <div className="mt-2 text-sm text-gray-400 text-right">
+                    {formatCurrency(formData.focus)} ₽
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* СБП */}
           <div className="form-group">
-            <label className="form-label">
-              📱 СБП (рубли)
-            </label>
-            <input
-              type="text"
-              value={formData.sbp}
-              onChange={(e) => handleInputChange('sbp', e.target.value)}
-              className="input-primary text-lg font-mono"
-              placeholder="0"
-            />
-            {formData.sbp && (
-              <div className="mt-2 text-sm text-gray-400">
-                {formatCurrency(formData.sbp)} ₽
+            <div className="flex items-center justify-between space-x-4">
+              <label className="form-label flex items-center text-lg font-medium text-white min-w-[200px]">
+                <CreditCard className="h-5 w-5 mr-3 text-blue-400" />
+                СБП
+              </label>
+              <div className="flex-1 max-w-[200px]">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.sbp}
+                    onChange={(e) => handleInputChange('sbp', e.target.value)}
+                    className="input-field text-lg font-mono text-right pr-10 bg-gray-750 border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm">
+                    ₽
+                  </span>
+                </div>
+                {formData.sbp && (
+                  <div className="mt-2 text-sm text-gray-400 text-right">
+                    {formatCurrency(formData.sbp)} ₽
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Наличные */}
           <div className="form-group">
-            <label className="form-label">
-              💵 Наличные (рубли)
-            </label>
-            <input
-              type="text"
-              value={formData.cash}
-              onChange={(e) => handleInputChange('cash', e.target.value)}
-              className="input-primary text-lg font-mono"
-              placeholder="0"
-            />
-            {formData.cash && (
-              <div className="mt-2 text-sm text-gray-400">
-                {formatCurrency(formData.cash)} ₽
+            <div className="flex items-center justify-between space-x-4">
+              <label className="form-label flex items-center text-lg font-medium text-white min-w-[200px]">
+                <Wallet className="h-5 w-5 mr-3 text-green-400" />
+                Наличные
+              </label>
+              <div className="flex-1 max-w-[200px]">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.cash}
+                    onChange={(e) => handleInputChange('cash', e.target.value)}
+                    className="input-field text-lg font-mono text-right pr-10 bg-gray-750 border-gray-600 focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm">
+                    ₽
+                  </span>
+                </div>
+                {formData.cash && (
+                  <div className="mt-2 text-sm text-gray-400 text-right">
+                    {formatCurrency(formData.cash)} ₽
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Итоговая сумма */}
-          <div className="bg-gradient-to-r from-gray-800 to-gray-700 rounded-xl p-4 border border-gray-600">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-300">Будет добавлено:</span>
-              <span className="text-2xl font-bold text-white">
+          <div className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-xl p-6 border border-purple-500/30 mt-8">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-300 text-lg font-medium">Будет добавлено:</span>
+              <span className="text-3xl font-bold text-white bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
                 {formatCurrency(calculateTotal())} ₽
               </span>
             </div>
-            <div className="flex items-center mt-2 text-sm text-gray-400">
-              <Calculator className="h-4 w-4 mr-1" />
+            <div className="flex items-center text-gray-400 text-sm">
+              <Calculator className="h-4 w-4 mr-2" />
               Фокусные + СБП + Наличные
             </div>
           </div>
 
           {/* Кнопки действий */}
-          <div className="flex space-x-3 pt-4">
+          <div className="flex space-x-4 pt-6">
             <button
               type="button"
               onClick={handleReset}
               disabled={isSubmitting}
-              className="flex-1 btn-secondary flex items-center justify-center"
+              className="flex-1 btn-secondary flex items-center justify-center py-3 rounded-xl border border-gray-600 hover:border-gray-500 transition-all"
             >
               <RotateCcw className="h-4 w-4 mr-2" />
               Сбросить
@@ -275,7 +315,7 @@ const DataEntry = ({ userData }) => {
             <button
               type="submit"
               disabled={isSubmitting || calculateTotal() === 0}
-              className="flex-1 btn-primary flex items-center justify-center"
+              className="flex-1 btn-primary flex items-center justify-center py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {isSubmitting ? (
                 <>
@@ -292,14 +332,17 @@ const DataEntry = ({ userData }) => {
           </div>
 
           {lastSaved && (
-            <div className="text-center text-sm text-green-400 animate-fade-in">
-              ✓ Данные сохранены {lastSaved.toLocaleTimeString('ru-RU')}
+            <div className="text-center text-sm text-green-400 animate-fade-in flex items-center justify-center">
+              <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              Данные сохранены {lastSaved.toLocaleTimeString('ru-RU')}
             </div>
           )}
         </form>
 
         {/* Подсказка */}
-        <div className="mt-6 text-center text-gray-500 text-sm">
+        <div className="mt-8 text-center text-gray-500 text-sm">
           <p>Данные могут вносить все сотрудники. Итоговая сумма рассчитывается автоматически.</p>
           <p className="mt-1">Работает в офлайн-режиме.</p>
         </div>

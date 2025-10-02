@@ -4,6 +4,7 @@ import { Calendar, Clock, Plus, Edit, Trash2, ChevronLeft, ChevronRight, Users, 
 import { dataService } from '../services/dataService';
 import { exportService } from '../services/exportService';
 import { useNotifications } from '../contexts/NotificationContext';
+import * as XLSX from 'xlsx';
 
 const Schedule = ({ userData }) => {
   const [currentDate, setCurrentDate] = useState(new Date());

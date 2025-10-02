@@ -1,17 +1,22 @@
 // src/pages/PlanManagement.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Target, Calendar, TrendingUp, Save, ChevronLeft, ChevronRight, Download, Upload, FileUp } from 'lucide-react';
+import { Target, Calendar, TrendingUp, Save, ChevronLeft, ChevronRight, Download, Upload, FileUp, X } from 'lucide-react';
 import { dataService } from '../services/dataService';
 import { exportService } from '../services/exportService';
 import { useNotifications } from '../contexts/NotificationContext';
+import Modal from '../components/ui/Modal';
+import * as XLSX from 'xlsx';
 
 const PlanManagement = ({ userData }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [plans, setPlans] = useState({});
   const [editingDate, setEditingDate] = useState(null);
-  const [isImporting, setIsImporting] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
   const fileInputRef = useRef(null);
   const [editForm, setEditForm] = useState({
     revenue: '',
@@ -84,20 +89,7 @@ const PlanManagement = ({ userData }) => {
   };
 
   const handleExport = () => {
-    const exportData = Object.entries(plans).map(([date, plan]) => ({
-      'Дата': date,
-      'Выручка (план)': plan?.revenue || 0,
-      'Фокусные товары (план)': plan?.focus || 0,
-      'СБП (план)': plan?.sbp || 0,
-      'Общий план': (plan?.revenue || 0) + (plan?.focus || 0) + (plan?.sbp || 0)
-    }));
-
-    exportService.exportToExcel(exportData, `eps-plans-${currentDate.getFullYear()}-${currentDate.getMonth() + 1}`);
-    addNotification({
-      type: 'success',
-      title: 'Экспорт завершен',
-      message: 'Планы успешно экспортированы в Excel'
-    });
+    setIsExportModalOpen(true);
   };
 
   const handleFileSelect = (event) => {
@@ -176,7 +168,7 @@ const PlanManagement = ({ userData }) => {
             title: 'Импорт завершен',
             message: `Импортировано ${importedCount} планов${skippedCount > 0 ? `, пропущено ${skippedCount} записей` : ''}`
           });
-          setIsImporting(false);
+          setIsImportModalOpen(false);
           setSelectedFile(null);
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
@@ -223,12 +215,104 @@ const PlanManagement = ({ userData }) => {
       }
     ];
 
-    exportService.exportToExcel(templateData, 'eps-plans-template');
+    // Создаем рабочую книгу
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    
+    // Добавляем лист с инструкциями
+    const instructions = [
+      ['Инструкция по заполнению:'],
+      ['1. Заполните столбец "Дата" в формате ГГГГ-ММ-ДД'],
+      ['2. Укажите планы в рублях без копеек'],
+      ['3. Сохраните файл и загрузите через форму импорта'],
+      ['', ''],
+      ['Поддерживаемые форматы:', 'Excel (.xlsx, .xls), CSV']
+    ];
+    const wsInstructions = XLSX.utils.aoa_to_sheet(instructions);
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Шаблон планов');
+    XLSX.utils.book_append_sheet(wb, wsInstructions, 'Инструкция');
+    
+    // Скачиваем файл
+    XLSX.writeFile(wb, 'eps-plans-template.xlsx');
+    
     addNotification({
       type: 'success',
       title: 'Шаблон скачан',
       message: 'Шаблон для импорта планов скачан'
     });
+  };
+
+  const handleExportPlans = () => {
+    if (!exportStartDate || !exportEndDate) {
+      addNotification({
+        type: 'error',
+        title: 'Ошибка',
+        message: 'Выберите период для экспорта'
+      });
+      return;
+    }
+
+    const start = new Date(exportStartDate);
+    const end = new Date(exportEndDate);
+    
+    if (start > end) {
+      addNotification({
+        type: 'error',
+        title: 'Ошибка',
+        message: 'Дата начала не может быть больше даты окончания'
+      });
+      return;
+    }
+
+    // Собираем планы за выбранный период
+    const sheets = [];
+    const current = new Date(start);
+    
+    while (current <= end) {
+      const year = current.getFullYear();
+      const month = current.getMonth() + 1;
+      const monthPlans = dataService.getPlansForMonth(year, month);
+      
+      if (Object.keys(monthPlans).length > 0) {
+        const sheetData = Object.entries(monthPlans).map(([date, plan]) => ({
+          'Дата': date,
+          'Выручка (план)': plan?.revenue || 0,
+          'Фокусные товары (план)': plan?.focus || 0,
+          'СБП (план)': plan?.sbp || 0,
+          'Общий план': (plan?.revenue || 0) + (plan?.focus || 0) + (plan?.sbp || 0)
+        }));
+
+        sheets.push({
+          name: `Планы ${month}-${year}`,
+          data: sheetData
+        });
+      }
+
+      // Переходим к следующему месяцу
+      current.setMonth(current.getMonth() + 1);
+    }
+
+    if (sheets.length === 0) {
+      addNotification({
+        type: 'warning',
+        title: 'Нет данных',
+        message: 'За выбранный период планы не найдены'
+      });
+      return;
+    }
+
+    // Экспортируем в Excel
+    const success = exportService.exportToExcel(sheets, `eps-plans-${exportStartDate}-to-${exportEndDate}`);
+    
+    if (success) {
+      addNotification({
+        type: 'success',
+        title: 'Экспорт завершен',
+        message: `Планы за период с ${exportStartDate} по ${exportEndDate} экспортированы`
+      });
+      setIsExportModalOpen(false);
+    }
   };
 
   const days = getDaysInMonth(currentDate);
@@ -271,7 +355,7 @@ const PlanManagement = ({ userData }) => {
             </button>
 
             <button
-              onClick={() => setIsImporting(true)}
+              onClick={() => setIsImportModalOpen(true)}
               className="btn-secondary flex items-center"
             >
               <Upload className="h-4 w-4 mr-2" />
@@ -415,104 +499,152 @@ const PlanManagement = ({ userData }) => {
         </div>
 
         {/* Модальное окно импорта */}
-        {isImporting && (
-          <div className="modal-overlay">
-            <div className="modal-content max-w-2xl">
-              <div className="p-6">
-                <h3 className="text-xl font-bold text-white mb-4">Импорт планов из Excel/CSV</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="form-label">Выберите файл Excel или CSV</label>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".xlsx, .xls, .csv"
-                      onChange={handleFileSelect}
-                      className="input-primary"
-                    />
-                    {selectedFile && (
-                      <div className="mt-2 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
-                        <p className="text-green-400 text-sm">
-                          📎 Выбран файл: <strong>{selectedFile.name}</strong>
-                        </p>
-                        <p className="text-green-400 text-xs mt-1">
-                          Размер: {(selectedFile.size / 1024).toFixed(2)} KB
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                    <p className="text-blue-400 text-sm mb-2">
-                      📋 Формат файла должен содержать столбцы:
-                    </p>
-                    <ul className="text-blue-400 text-sm list-disc list-inside space-y-1">
-                      <li><strong>Дата</strong> (в формате ГГГГ-ММ-ДД)</li>
-                      <li><strong>Выручка (план)</strong> (число)</li>
-                      <li><strong>Фокусные товары (план)</strong> (число)</li>
-                      <li><strong>СБП (план)</strong> (число)</li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                    <p className="text-green-400 text-sm mb-2">
-                      💡 Советы по импорту:
-                    </p>
-                    <ul className="text-green-400 text-sm list-disc list-inside space-y-1">
-                      <li>Поддерживаются файлы Excel (.xlsx, .xls) и CSV</li>
-                      <li>Можно использовать экспортированный шаблон</li>
-                      <li>Даты должны быть в формате ГГГГ-ММ-ДД</li>
-                      <li>Существующие планы будут перезаписаны</li>
-                    </ul>
-                  </div>
-
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={downloadTemplate}
-                      className="flex-1 btn-secondary flex items-center justify-center"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Скачать шаблон
-                    </button>
-                    <button
-                      onClick={handleUploadPlan}
-                      disabled={!selectedFile || isUploading}
-                      className="flex-1 btn-primary flex items-center justify-center disabled:opacity-50"
-                    >
-                      {isUploading ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Загрузка...
-                        </>
-                      ) : (
-                        <>
-                          <FileUp className="h-4 w-4 mr-2" />
-                          Загрузить план
-                        </>
-                      )}
-                    </button>
-                  </div>
+        <Modal
+          isOpen={isImportModalOpen}
+          onClose={() => {
+            setIsImportModalOpen(false);
+            setSelectedFile(null);
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
+          }}
+          title="Импорт планов из Excel/CSV"
+          size="lg"
+        >
+          <div className="space-y-6">
+            <div>
+              <label className="form-label">Выберите файл Excel или CSV</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx, .xls, .csv"
+                onChange={handleFileSelect}
+                className="input-field"
+              />
+              {selectedFile && (
+                <div className="mt-2 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
+                  <p className="text-green-400 text-sm">
+                    📎 Выбран файл: <strong>{selectedFile.name}</strong>
+                  </p>
+                  <p className="text-green-400 text-xs mt-1">
+                    Размер: {(selectedFile.size / 1024).toFixed(2)} KB
+                  </p>
                 </div>
-                
-                <div className="flex space-x-3 mt-6">
-                  <button
-                    onClick={() => {
-                      setIsImporting(false);
-                      setSelectedFile(null);
-                      if (fileInputRef.current) {
-                        fileInputRef.current.value = '';
-                      }
-                    }}
-                    className="flex-1 btn-secondary"
-                  >
-                    Отмена
-                  </button>
-                </div>
-              </div>
+              )}
+            </div>
+            
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <p className="text-blue-400 text-sm mb-2">
+                📋 Формат файла должен содержать столбцы:
+              </p>
+              <ul className="text-blue-400 text-sm list-disc list-inside space-y-1">
+                <li><strong>Дата</strong> (в формате ГГГГ-ММ-ДД)</li>
+                <li><strong>Выручка (план)</strong> (число)</li>
+                <li><strong>Фокусные товары (план)</strong> (число)</li>
+                <li><strong>СБП (план)</strong> (число)</li>
+              </ul>
+            </div>
+
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+              <p className="text-green-400 text-sm mb-2">
+                💡 Советы по импорту:
+              </p>
+              <ul className="text-green-400 text-sm list-disc list-inside space-y-1">
+                <li>Поддерживаются файлы Excel (.xlsx, .xls) и CSV</li>
+                <li>Можно использовать экспортированный шаблон</li>
+                <li>Даты должны быть в формате ГГГГ-ММ-ДД</li>
+                <li>Существующие планы будут перезаписаны</li>
+              </ul>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={downloadTemplate}
+                className="flex-1 btn-secondary flex items-center justify-center"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Скачать шаблон
+              </button>
+              <button
+                onClick={handleUploadPlan}
+                disabled={!selectedFile || isUploading}
+                className="flex-1 btn-primary flex items-center justify-center disabled:opacity-50"
+              >
+                {isUploading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Загрузка...
+                  </>
+                ) : (
+                  <>
+                    <FileUp className="h-4 w-4 mr-2" />
+                    Загрузить план
+                  </>
+                )}
+              </button>
             </div>
           </div>
-        )}
+        </Modal>
+
+        {/* Модальное окно экспорта */}
+        <Modal
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          title="Экспорт планов"
+          size="md"
+        >
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="form-label">Дата начала</label>
+                <input
+                  type="date"
+                  value={exportStartDate}
+                  onChange={(e) => setExportStartDate(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="form-label">Дата окончания</label>
+                <input
+                  type="date"
+                  value={exportEndDate}
+                  onChange={(e) => setExportEndDate(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+            </div>
+
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+              <p className="text-blue-400 text-sm mb-2">
+                📊 Информация об экспорте:
+              </p>
+              <ul className="text-blue-400 text-sm list-disc list-inside space-y-1">
+                <li>Будет создан многостраничный Excel файл</li>
+                <li>Каждый месяц будет на отдельном листе</li>
+                <li>Поддерживается экспорт за несколько месяцев</li>
+                <li>Формат: Excel (.xlsx) с автоматическим скачиванием</li>
+              </ul>
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={() => setIsExportModalOpen(false)}
+                className="flex-1 btn-secondary"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleExportPlans}
+                disabled={!exportStartDate || !exportEndDate}
+                className="flex-1 btn-primary flex items-center justify-center disabled:opacity-50"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Экспортировать
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );

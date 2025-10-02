@@ -2,9 +2,72 @@
 class DataService {
   constructor() {
     this.storageKey = 'eps-analytics-data';
+    this.listeners = []; // Массив функций-подписчиков на изменения данных
     this.init();
   }
 
+  /**
+   * Подписка на изменения данных
+   * @param {function} listener - функция, которая будет вызываться при изменениях
+   * @returns {function} функция для отписки
+   */
+  subscribe(listener) {
+    this.listeners.push(listener);
+    // Возвращаем функцию для отписки
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener);
+    };
+  }
+
+  /**
+   * Уведомление всех подписчиков об изменениях
+   */
+  notifyListeners() {
+    // Создаем копию массива listeners для безопасной итерации
+    const currentListeners = [...this.listeners];
+    currentListeners.forEach(listener => {
+      try {
+        listener();
+      } catch (error) {
+        console.error('Ошибка в listener:', error);
+      }
+    });
+  }
+
+  /**
+   * Получение всех данных из localStorage
+   */
+  getData() {
+    try {
+      const data = localStorage.getItem(this.storageKey);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('❌ Ошибка чтения данных:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Сохранение данных в localStorage с уведомлением подписчиков
+   */
+  saveData(data) {
+    try {
+      data.lastUpdated = new Date().toISOString();
+      localStorage.setItem(this.storageKey, JSON.stringify(data));
+      
+      // УВЕДОМЛЯЕМ ПОДПИСЧИКОВ ПОСЛЕ СОХРАНЕНИЯ
+      this.notifyListeners();
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Ошибка сохранения данных:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Инициализация начальных данных
+   */
   init() {
     if (!this.getData()) {
       const initialData = {
@@ -14,10 +77,14 @@ class DataService {
             name: 'Иванов Иван Иванович',
             employeeId: '12345',
             phone: '+7 (999) 123-45-67',
+            email: 'ivanov@epc.ru',
             telegram: '@ivanov',
             birthDate: '15.03.1990',
             stores: ['ЕРС 2334'],
             role: 'Сотрудник',
+            position: 'Продавец-консультант',
+            department: 'Продажи',
+            hireDate: '15.01.2024',
             createdAt: new Date().toISOString()
           },
           {
@@ -25,10 +92,14 @@ class DataService {
             name: 'Петрова Анна Сергеевна',
             employeeId: '12346',
             phone: '+7 (999) 123-45-68',
+            email: 'petrova@epc.ru',
             telegram: '@petrova',
             birthDate: '20.07.1985',
             stores: ['ЕРС 2334'],
             role: 'ЗДМ',
+            position: 'Заместитель директора магазина',
+            department: 'Управление',
+            hireDate: '20.01.2024',
             createdAt: new Date().toISOString()
           },
           {
@@ -36,10 +107,14 @@ class DataService {
             name: 'Сидоров Алексей Владимирович',
             employeeId: '12347',
             phone: '+7 (999) 123-45-69',
+            email: 'sidorov@epc.ru',
             telegram: '@sidorov',
             birthDate: '10.11.1992',
             stores: ['ЕРС 2312'],
             role: 'Админ',
+            position: 'Администратор системы',
+            department: 'IT',
+            hireDate: '10.01.2024',
             createdAt: new Date().toISOString()
           },
           {
@@ -47,10 +122,14 @@ class DataService {
             name: 'Козлова Мария Петровна',
             employeeId: '12348',
             phone: '+7 (999) 123-45-70',
+            email: 'kozlova@epc.ru',
             telegram: '@kozlova',
             birthDate: '05.05.1988',
             stores: ['ЕРС 2312'],
             role: 'ДТК',
+            position: 'Директор территории качества',
+            department: 'Управление',
+            hireDate: '05.01.2024',
             createdAt: new Date().toISOString()
           }
         ],
@@ -102,46 +181,16 @@ class DataService {
     }
   }
 
-  getData() {
-    try {
-      const data = localStorage.getItem(this.storageKey);
-      return data ? JSON.parse(data) : null;
-    } catch (error) {
-      console.error('❌ Ошибка чтения данных:', error);
-      this.backupCorruptedData();
-      return null;
-    }
-  }
-
-  saveData(data) {
-    try {
-      data.lastUpdated = new Date().toISOString();
-      localStorage.setItem(this.storageKey, JSON.stringify(data));
-      return true;
-    } catch (error) {
-      console.error('❌ Ошибка сохранения данных:', error);
-      return false;
-    }
-  }
-
-  backupCorruptedData() {
-    try {
-      const corrupted = localStorage.getItem(this.storageKey);
-      if (corrupted) {
-        localStorage.setItem(`${this.storageKey}-backup-${Date.now()}`, corrupted);
-        localStorage.removeItem(this.storageKey);
-      }
-    } catch (error) {
-      console.error('❌ Ошибка резервного копирования:', error);
-    }
-  }
-
+  /**
+   * Восстановление и ремонт структуры данных
+   */
   repairData() {
     const allData = this.getData();
     if (!allData) return;
 
     let needsRepair = false;
 
+    // Восстановление revenueData
     if (!allData.revenueData || typeof allData.revenueData !== 'object') {
       allData.revenueData = {};
       needsRepair = true;
@@ -151,36 +200,10 @@ class DataService {
       if (!Array.isArray(allData.revenueData[date])) {
         allData.revenueData[date] = [];
         needsRepair = true;
-      } else {
-        allData.revenueData[date] = allData.revenueData[date].map(entry => {
-          if (!entry || typeof entry !== 'object') {
-            needsRepair = true;
-            return null;
-          }
-
-          const repairedEntry = {
-            employeeId: String(entry.employeeId || 'unknown'),
-            employeeName: String(entry.employeeName || 'Неизвестный сотрудник'),
-            focus: this.sanitizeNumber(entry.focus),
-            sbp: this.sanitizeNumber(entry.sbp),
-            cash: this.sanitizeNumber(entry.cash),
-            timestamp: entry.timestamp || new Date().toISOString()
-          };
-
-          if (JSON.stringify(entry) !== JSON.stringify(repairedEntry)) {
-            needsRepair = true;
-          }
-
-          return repairedEntry;
-        }).filter(entry => entry !== null);
       }
     });
 
-    if (!allData.plans || typeof allData.plans !== 'object') {
-      allData.plans = {};
-      needsRepair = true;
-    }
-
+    // Восстановление employees
     if (!Array.isArray(allData.employees)) {
       allData.employees = [];
       needsRepair = true;
@@ -190,10 +213,14 @@ class DataService {
         name: String(emp.name || 'Неизвестный сотрудник'),
         employeeId: String(emp.employeeId || '00000'),
         phone: String(emp.phone || 'Не указан'),
+        email: String(emp.email || 'Не указан'),
         telegram: String(emp.telegram || 'Не указан'),
         birthDate: String(emp.birthDate || 'Не указана'),
         stores: Array.isArray(emp.stores) ? emp.stores : ['ЕРС 2334'],
         role: String(emp.role || 'Сотрудник'),
+        position: String(emp.position || 'Продавец-консультант'),
+        department: String(emp.department || 'Продажи'),
+        hireDate: String(emp.hireDate || '15.01.2024'),
         createdAt: emp.createdAt || new Date().toISOString()
       }));
     }
@@ -206,6 +233,16 @@ class DataService {
     return allData;
   }
 
+  /**
+   * Получение текущей даты в формате YYYY-MM-DD
+   */
+  getCurrentDate() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  /**
+   * Очистка числовых значений
+   */
   sanitizeNumber(value) {
     if (typeof value === 'number') return String(value);
     if (typeof value === 'string') {
@@ -215,10 +252,118 @@ class DataService {
     return '0';
   }
 
-  getCurrentDate() {
-    return new Date().toISOString().split('T')[0];
+  // ========== МЕТОДЫ ДЛЯ РАБОТЫ С СОТРУДНИКАМИ ==========
+
+  /**
+   * Получение всех сотрудников
+   */
+  getEmployees() {
+    const allData = this.getData();
+    return allData ? allData.employees : [];
   }
 
+  /**
+   * Поиск сотрудника по табельному номеру
+   */
+  getEmployeeById(employeeId) {
+    const allData = this.getData();
+    if (!allData) return null;
+    return allData.employees.find(emp => emp.employeeId === employeeId);
+  }
+
+  /**
+   * Обновление данных сотрудника
+   */
+  updateEmployee(employeeId, updatedData) {
+    const allData = this.getData();
+    if (!allData) {
+      console.error('❌ Нет данных для обновления');
+      return false;
+    }
+
+    const employeeIndex = allData.employees.findIndex(emp => emp.employeeId === employeeId);
+    if (employeeIndex === -1) {
+      console.error('❌ Сотрудник не найден:', employeeId);
+      return false;
+    }
+
+    // СОЗДАЕМ НОВЫЙ МАССИВ СОТРУДНИКОВ (важно для React)
+    const updatedEmployees = [...allData.employees];
+    
+    // СОЗДАЕМ НОВЫЙ ОБЪЕКТ СОТРУДНИКА
+    updatedEmployees[employeeIndex] = {
+      ...updatedEmployees[employeeIndex],
+      ...updatedData
+    };
+
+    // СОЗДАЕМ НОВЫЙ ОБЪЕКТ ДАННЫХ
+    const newData = {
+      ...allData,
+      employees: updatedEmployees
+    };
+
+    console.log('🔄 Обновление сотрудника:', {
+      employeeId,
+      updatedData,
+      result: updatedEmployees[employeeIndex]
+    });
+
+    return this.saveData(newData);
+  }
+
+  /**
+   * Добавление нового сотрудника
+   */
+  addEmployee(employeeData) {
+    const allData = this.getData();
+    if (!allData) return false;
+
+    const newEmployee = {
+      id: Date.now().toString(),
+      name: String(employeeData.name || 'Новый сотрудник'),
+      employeeId: String(employeeData.employeeId || Date.now().toString()),
+      phone: String(employeeData.phone || 'Не указан'),
+      email: String(employeeData.email || 'Не указан'),
+      telegram: String(employeeData.telegram || 'Не указан'),
+      birthDate: String(employeeData.birthDate || 'Не указана'),
+      stores: Array.isArray(employeeData.stores) ? employeeData.stores : ['ЕРС 2334'],
+      role: String(employeeData.role || 'Сотрудник'),
+      position: String(employeeData.position || 'Продавец-консультант'),
+      department: String(employeeData.department || 'Продажи'),
+      hireDate: String(employeeData.hireDate || '15.01.2024'),
+      createdAt: new Date().toISOString()
+    };
+
+    // СОЗДАЕМ НОВЫЙ МАССИВ
+    const newData = {
+      ...allData,
+      employees: [...allData.employees, newEmployee]
+    };
+
+    return this.saveData(newData);
+  }
+
+  /**
+   * Удаление сотрудника
+   */
+  deleteEmployee(employeeId) {
+    const allData = this.getData();
+    if (!allData) return false;
+
+    // СОЗДАЕМ НОВЫЙ МАССИВ БЕЗ УДАЛЕННОГО СОТРУДНИКА
+    const newData = {
+      ...allData,
+      employees: allData.employees.filter(emp => emp.id !== employeeId)
+    };
+
+    return this.saveData(newData);
+  }
+
+  // ========== МЕТОДЫ ДЛЯ РАБОТЫ С ВЫРУЧКОЙ ==========
+
+  /**
+   * Сохранение записи о выручке
+   */
   saveRevenueEntry(date, employeeId, employeeName, data) {
     try {
       const allData = this.getData();
@@ -237,18 +382,21 @@ class DataService {
         cash: this.sanitizeNumber(data?.cash)
       };
 
-      console.log('🔄 Сохранение данных:', { 
+      console.log('🔄 Сохранение данных выручки:', { 
         date: entryDate, 
         employeeId: safeEmployeeId, 
         employeeName: safeEmployeeName,
         data: safeData 
       });
 
-      if (!allData.revenueData[entryDate]) {
-        allData.revenueData[entryDate] = [];
+      // СОЗДАЕМ НОВЫЕ СТРУКТУРЫ ДАННЫХ
+      const newRevenueData = { ...allData.revenueData };
+      if (!newRevenueData[entryDate]) {
+        newRevenueData[entryDate] = [];
       }
       
-      const existingIndex = allData.revenueData[entryDate].findIndex(
+      const newDateEntries = [...newRevenueData[entryDate]];
+      const existingIndex = newDateEntries.findIndex(
         entry => entry.employeeId === safeEmployeeId
       );
       
@@ -262,18 +410,23 @@ class DataService {
       };
       
       if (existingIndex >= 0) {
-        allData.revenueData[entryDate][existingIndex] = entryData;
-        console.log('✓ Обновлена существующая запись');
+        newDateEntries[existingIndex] = entryData;
       } else {
-        allData.revenueData[entryDate].push(entryData);
-        console.log('✓ Добавлена новая запись');
+        newDateEntries.push(entryData);
       }
       
-      const success = this.saveData(allData);
+      newRevenueData[entryDate] = newDateEntries;
+      
+      const newData = {
+        ...allData,
+        revenueData: newRevenueData
+      };
+      
+      const success = this.saveData(newData);
       if (success) {
-        console.log('✓ Данные успешно сохранены в localStorage');
+        console.log('✓ Данные выручки успешно сохранены');
       } else {
-        console.error('❌ Ошибка сохранения в localStorage');
+        console.error('❌ Ошибка сохранения данных выручки');
       }
       
       return success;
@@ -283,6 +436,9 @@ class DataService {
     }
   }
 
+  /**
+   * Получение дневной выручки
+   */
   getDailyRevenue(date) {
     const allData = this.getData();
     if (!allData) return { focus: 0, sbp: 0, cash: 0 };
@@ -297,6 +453,9 @@ class DataService {
     }), { focus: 0, sbp: 0, cash: 0 });
   }
 
+  /**
+   * Получение записей о выручке за день
+   */
   getRevenueEntries(date) {
     const allData = this.getData();
     if (!allData) return [];
@@ -305,53 +464,36 @@ class DataService {
     return allData.revenueData[entryDate] || [];
   }
 
-  addEmployee(employeeData) {
-    const allData = this.getData();
-    if (!allData) return false;
+  // ========== МЕТОДЫ ДЛЯ РАБОТЫ С ПЛАНАМИ ==========
 
-    const newEmployee = {
-      id: Date.now().toString(),
-      name: String(employeeData.name || 'Новый сотрудник'),
-      employeeId: String(employeeData.employeeId || Date.now().toString()),
-      phone: String(employeeData.phone || 'Не указан'),
-      telegram: String(employeeData.telegram || 'Не указан'),
-      birthDate: String(employeeData.birthDate || 'Не указана'),
-      stores: Array.isArray(employeeData.stores) ? employeeData.stores : ['ЕРС 2334'],
-      role: String(employeeData.role || 'Сотрудник'),
-      createdAt: new Date().toISOString()
-    };
-
-    allData.employees.push(newEmployee);
-    return this.saveData(allData);
-  }
-
-  getEmployees() {
-    const allData = this.getData();
-    return allData ? allData.employees : [];
-  }
-
-  getEmployeeById(employeeId) {
-    const allData = this.getData();
-    if (!allData) return null;
-    return allData.employees.find(emp => emp.employeeId === employeeId);
-  }
-
+  /**
+   * Сохранение дневного плана
+   */
   saveDailyPlan(date, planData) {
     const allData = this.getData();
     if (!allData) return false;
 
     const planDate = date || this.getCurrentDate();
     
-    allData.plans[planDate] = {
-      revenue: parseInt(planData.revenue) || 0,
-      focus: parseInt(planData.focus) || 0,
-      sbp: parseInt(planData.sbp) || 0,
-      updatedAt: new Date().toISOString()
+    const newData = {
+      ...allData,
+      plans: {
+        ...allData.plans,
+        [planDate]: {
+          revenue: parseInt(planData.revenue) || 0,
+          focus: parseInt(planData.focus) || 0,
+          sbp: parseInt(planData.sbp) || 0,
+          updatedAt: new Date().toISOString()
+        }
+      }
     };
     
-    return this.saveData(allData);
+    return this.saveData(newData);
   }
 
+  /**
+   * Получение дневного плана
+   */
   getDailyPlan(date) {
     const allData = this.getData();
     if (!allData) return null;
@@ -362,34 +504,37 @@ class DataService {
 
   getPlansForMonth(year, month) {
     const allData = this.getData();
-    if (!allData) return {};
+    if (!allData || !allData.plans) return {};
 
-    const monthPlans = {};
-    const daysInMonth = new Date(year, month, 0).getDate();
-    
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      monthPlans[date] = allData.plans[date] || null;
-    }
-    
-    return monthPlans;
+    const plansInMonth = {};
+    Object.keys(allData.plans).forEach(dateStr => {
+      const date = new Date(dateStr);
+      if (date.getFullYear() === year && (date.getMonth() + 1) === month) {
+        plansInMonth[dateStr] = allData.plans[dateStr];
+      }
+    });
+
+    return plansInMonth;
   }
+  // ========== МЕТОДЫ ДЛЯ РАБОТЫ С РАСПИСАНИЕМ ==========
 
+  /**
+   * Сохранение записи расписания
+   */
   saveScheduleEntry(date, employeeId, scheduleData) {
     const allData = this.getData();
     if (!allData) return false;
 
-    if (!allData.schedules) {
-      allData.schedules = {};
-    }
-
     const scheduleDate = date || this.getCurrentDate();
     
-    if (!allData.schedules[scheduleDate]) {
-      allData.schedules[scheduleDate] = [];
+    // СОЗДАЕМ НОВЫЕ СТРУКТУРЫ ДАННЫХ
+    const newSchedules = { ...(allData.schedules || {}) };
+    if (!newSchedules[scheduleDate]) {
+      newSchedules[scheduleDate] = [];
     }
 
-    const existingIndex = allData.schedules[scheduleDate].findIndex(
+    const newDateSchedules = [...newSchedules[scheduleDate]];
+    const existingIndex = newDateSchedules.findIndex(
       entry => entry.employeeId === employeeId
     );
 
@@ -402,81 +547,58 @@ class DataService {
     };
 
     if (existingIndex >= 0) {
-      allData.schedules[scheduleDate][existingIndex] = entryData;
+      newDateSchedules[existingIndex] = entryData;
     } else {
-      allData.schedules[scheduleDate].push(entryData);
+      newDateSchedules.push(entryData);
     }
 
-    return this.saveData(allData);
+    newSchedules[scheduleDate] = newDateSchedules;
+
+    const newData = {
+      ...allData,
+      schedules: newSchedules
+    };
+
+    return this.saveData(newData);
   }
 
+  /**
+   * Получение расписания на дату
+   */
   getScheduleForDate(date) {
     const allData = this.getData();
     if (!allData || !allData.schedules) return [];
     return allData.schedules[date] || [];
   }
 
-  getEmployeeSchedule(employeeId, month, year) {
-    const allData = this.getData();
-    if (!allData || !allData.schedules) return {};
+  // ========== СЛУЖЕБНЫЕ МЕТОДЫ ==========
 
-    const schedule = {};
-    const daysInMonth = new Date(year, month, 0).getDate();
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const dailySchedule = allData.schedules[date] || [];
-      const employeeSchedule = dailySchedule.find(entry => entry.employeeId === employeeId);
-      
-      if (employeeSchedule) {
-        schedule[date] = employeeSchedule;
-      }
-    }
-
-    return schedule;
-  }
-
-  copySchedule(sourceDate, targetDates) {
-    const allData = this.getData();
-    if (!allData || !allData.schedules) return false;
-
-    const sourceSchedules = allData.schedules[sourceDate] || [];
-    
-    targetDates.forEach(targetDate => {
-      if (!allData.schedules[targetDate]) {
-        allData.schedules[targetDate] = [];
-      }
-      
-      // Удаляем существующие записи на целевую дату
-      allData.schedules[targetDate] = [];
-      
-      // Копируем расписание
-      sourceSchedules.forEach(schedule => {
-        allData.schedules[targetDate].push({
-          ...schedule,
-          createdAt: new Date().toISOString()
-        });
-      });
-    });
-
-    return this.saveData(allData);
-  }
-
+  /**
+   * Экспорт всех данных
+   */
   exportData() {
     return this.getData();
   }
 
+  /**
+   * Импорт данных
+   */
   importData(newData) {
     try {
-      localStorage.setItem(this.storageKey, JSON.stringify(newData));
-      this.repairData();
-      return true;
+      const success = this.saveData(newData);
+      if (success) {
+        console.log('✓ Данные успешно импортированы');
+      }
+      return success;
     } catch (error) {
       console.error('❌ Ошибка импорта данных:', error);
       return false;
     }
   }
 
+  /**
+   * Очистка всех данных
+   */
   clearAllData() {
     try {
       localStorage.removeItem(this.storageKey);
@@ -488,6 +610,9 @@ class DataService {
     }
   }
 
+  /**
+   * Получение информации о хранилище
+   */
   getStorageInfo() {
     const data = this.getData();
     return {
@@ -499,9 +624,26 @@ class DataService {
       lastUpdated: data?.lastUpdated || 'unknown'
     };
   }
+  getEmployeeSchedule(employeeId, month, year) {
+    const allData = this.getData();
+    if (!allData || !allData.schedules) return {};
+
+    const employeeSchedules = {};
+    Object.keys(allData.schedules).forEach(dateStr => {
+      const date = new Date(dateStr);
+      if (date.getFullYear() === year && (date.getMonth() + 1) === month) {
+        const schedule = allData.schedules[dateStr].find(s => s.employeeId === employeeId);
+        if (schedule) {
+          employeeSchedules[dateStr] = schedule;
+        }
+      }
+    });
+
+    return employeeSchedules;
+}
 }
 
-// Создаем экземпляр сервиса
+// Создаем и экспортируем экземпляр сервиса
 export const dataService = new DataService();
 
 // Экспортируем dashboardService как именованный экспорт

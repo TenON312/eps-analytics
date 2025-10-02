@@ -395,7 +395,7 @@ const Dashboard = ({ userData }) => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {recentAchievements.map((achievement, index) => (
             <div 
-              key={achievement.id} 
+              key={`${achievement.id}-${index}`}
               className={`p-4 rounded-lg border-2 transition-all hover:scale-105 ${
                 achievement.type === 'revenue' ? 'border-blue-500/50 bg-blue-500/10' :
                 achievement.type === 'focus' ? 'border-green-500/50 bg-green-500/10' :
