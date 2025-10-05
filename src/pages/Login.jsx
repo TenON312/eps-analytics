@@ -27,7 +27,7 @@ const Login = ({ onLogin }) => {
       role: 'ЗДМ'
     },
     '12347': {
-      name: 'Сидоров Алексей Владимирович',
+      name: 'Федоров Александр',
       employeeId: '12347',
       phone: '+7 (999) 123-45-69',
       telegram: '@sidorov',

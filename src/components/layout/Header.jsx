@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 const Header = () => {
@@ -8,7 +7,7 @@ const Header = () => {
         <div className="flex justify-between items-center h-16">
           {/* Левая часть - логотип или название */}
           <div className="flex items-center">
-            <h1 className="ml-2 text-xl font-bold text-white hidden md:block">EPC Analytics</h1>
+            <h1 className="ml-2 text-xl font-bold text-white hidden md:block">Каждый день на работе - это новая возможность для успеха</h1>
           </div>
 
           {/* Правая часть - пустая, так как кнопка выхода перенесена в сайдбар */}

@@ -49,12 +49,16 @@ const Schedule = ({ userData }) => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth() + 1;
     const schedulesData = {};
+
+    console.log('Загрузка расписания для:', year, month);
     
     employees.forEach(employee => {
       const employeeSchedule = dataService.getEmployeeSchedule(employee.employeeId, month, year);
+      console.log(`Расписание для ${employee.employeeId}:`, employeeSchedule);
       schedulesData[employee.employeeId] = employeeSchedule;
     });
     
+    console.log('Все расписания:', schedulesData);
     setSchedules(schedulesData);
   };
 
@@ -103,11 +107,18 @@ const Schedule = ({ userData }) => {
   };
 
   const handleExport = () => {
+    console.log('=== DEBUG EXPORT ===');
+    console.log('schedules:', schedules);
+    console.log('employees:', employees);
     const exportData = [];
     
     Object.entries(schedules).forEach(([employeeId, employeeSchedules]) => {
+      console.log(`Обрабатываем сотрудника ${employeeId}:`, employeeSchedules);
       const employee = employees.find(emp => emp.employeeId === employeeId);
+      console.log(`Найден сотрудник:`, employee);
+
       Object.entries(employeeSchedules).forEach(([date, schedule]) => {
+        console.log(`Обрабатываем дату ${date}:`, schedule);
         exportData.push({
           'Дата': date,
           'Табельный номер': employeeId,
@@ -119,6 +130,37 @@ const Schedule = ({ userData }) => {
         });
       });
     });
+
+    console.log('Итоговые данные для экспорта:', exportData);
+    console.log('Количество записей:', exportData.length);
+
+    if (exportData.length === 0) {
+      addNotification({
+        type: 'warning',
+        title: 'Нет данных для экспорта',
+        message: 'Добавьте расписание перед экспортом'
+      });
+      return;
+    }
+
+    const success = exportService.exportScheduleData(
+      exportData, 
+      `eps-schedule-${currentDate.getFullYear()}-${currentDate.getMonth() + 1}`
+    );
+
+    if (success) {
+      addNotification({
+        type: 'success',
+        title: 'Экспорт завершен',
+        message: `График работы успешно экспортирован (${exportData.length} записей)`
+    });
+    }else{
+      addNotification({
+        type: 'warning',
+        title: 'Экспорт в CSV',
+        message: 'Данные экспортированы в CSV формат'
+      })
+    }
 
     exportService.exportToExcel(exportData, `eps-schedule-${currentDate.getFullYear()}-${currentDate.getMonth() + 1}`);
     addNotification({

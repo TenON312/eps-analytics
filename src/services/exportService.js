@@ -1,4 +1,7 @@
 // src/services/exportService.js
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+
 class ExportService {
   constructor() {
     this.version = '2.0.0';
@@ -7,22 +10,31 @@ class ExportService {
   // Основной метод экспорта в Excel с поддержкой нескольких листов
   exportToExcel(sheets, filename = 'eps-export') {
     try {
-      // Проверяем, установлена ли библиотека xlsx
-      if (typeof XLSX === 'undefined') {
-        console.warn('Библиотека XLSX не установлена. Установите: npm install xlsx');
-        this.fallbackExport(sheets, filename);
+      // Создаем рабочую книгу
+      const totalRecords = sheets.reduce((sum, sheet) => sum + (sheet.data?.length || 0), 0);
+      if (totalRecords === 0) {
+        console.warn('⚠️ Попытка экспорта пустых данных');
         return false;
       }
 
-      // Создаем рабочую книгу
+      console.log('📤 Начало экспорта:', sheets.length, 'листов,', totalRecords, 'записей');
+
       const wb = XLSX.utils.book_new();
-      
+
       // Добавляем каждый лист
       sheets.forEach((sheet, index) => {
-        const ws = XLSX.utils.json_to_sheet(sheet.data || []);
-        const sheetName = sheet.name || `Лист${index + 1}`;
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        if (sheet.data && sheet.data.length > 0) {
+          const ws = XLSX.utils.json_to_sheet(sheet.data);
+          const sheetName = sheet.name || `Лист${index + 1}`;
+          XLSX.utils.book_append_sheet(wb, ws, sheetName);
+          console.log(`✅ Добавлен лист "${sheetName}" с ${sheet.data.length} записями`);
+        }
+
       });
+      if (wb.SheetNames.length === 0) {
+        console.error('❌ В книге нет листов для экспорта');
+        return false;
+      }
 
       // Добавляем лист с метаданными
       const metadata = [{
@@ -50,6 +62,20 @@ class ExportService {
     }
   }
 
+  // Упрощенный экспорт для единого массива данных
+  exportData(data, sheetName = 'Данные', filename = 'eps-export') {
+    const sheets = [{
+      name: sheetName,
+      data: Array.isArray(data) ? data : []
+    }];
+    return this.exportToExcel(sheets, filename);
+  }
+
+  // Экспорт для графика работы
+  exportScheduleData(data, filename = 'eps-schedule') {
+    return this.exportData(data, 'График работы', filename);
+  }
+
   // Запасной вариант экспорта в CSV
   fallbackExport(sheets, filename) {
     if (!sheets || sheets.length === 0) return;
@@ -63,21 +89,16 @@ class ExportService {
       headers.join(','),
       ...data.map(row => headers.map(header => {
         const value = row[header];
-        return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+        // Экранируем значения с запятыми
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
       }).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${filename}-${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    saveAs(blob, `${filename}-${new Date().toISOString().split('T')[0]}.csv`);
   }
 
   // Экспорт данных дашборда
@@ -88,27 +109,27 @@ class ExportService {
         data: [
           {
             'Показатель': 'Выручка',
-            'План (руб)': dashboardData.revenue?.plan || 0,
-            'Факт (руб)': dashboardData.revenue?.fact || 0,
-            'Выполнение (%)': dashboardData.revenue?.plan ? 
-              Math.round((dashboardData.revenue.fact / dashboardData.revenue.plan) * 100) : 0,
-            'Остаток (руб)': Math.max(0, (dashboardData.revenue?.plan || 0) - (dashboardData.revenue?.fact || 0))
+            'План (руб)': dashboardData?.revenue?.plan || 0,
+            'Факт (руб)': dashboardData?.revenue?.fact || 0,
+            'Выполнение (%)': dashboardData?.revenue?.plan ? 
+              Math.round(((dashboardData.revenue.fact || 0) / dashboardData.revenue.plan) * 100) : 0,
+            'Остаток (руб)': Math.max(0, (dashboardData?.revenue?.plan || 0) - (dashboardData?.revenue?.fact || 0))
           },
           {
             'Показатель': 'Фокусные товары',
-            'План (руб)': dashboardData.focus?.plan || 0,
-            'Факт (руб)': dashboardData.focus?.fact || 0,
-            'Выполнение (%)': dashboardData.focus?.plan ? 
-              Math.round((dashboardData.focus.fact / dashboardData.focus.plan) * 100) : 0,
-            'Остаток (руб)': Math.max(0, (dashboardData.focus?.plan || 0) - (dashboardData.focus?.fact || 0))
+            'План (руб)': dashboardData?.focus?.plan || 0,
+            'Факт (руб)': dashboardData?.focus?.fact || 0,
+            'Выполнение (%)': dashboardData?.focus?.plan ? 
+              Math.round(((dashboardData.focus.fact || 0) / dashboardData.focus.plan) * 100) : 0,
+            'Остаток (руб)': Math.max(0, (dashboardData?.focus?.plan || 0) - (dashboardData?.focus?.fact || 0))
           },
           {
             'Показатель': 'СБП',
-            'План (руб)': dashboardData.sbp?.plan || 0,
-            'Факт (руб)': dashboardData.sbp?.fact || 0,
-            'Выполнение (%)': dashboardData.sbp?.plan ? 
-              Math.round((dashboardData.sbp.fact / dashboardData.sbp.plan) * 100) : 0,
-            'Остаток (руб)': Math.max(0, (dashboardData.sbp?.plan || 0) - (dashboardData.sbp?.fact || 0))
+            'План (руб)': dashboardData?.sbp?.plan || 0,
+            'Факт (руб)': dashboardData?.sbp?.fact || 0,
+            'Выполнение (%)': dashboardData?.sbp?.plan ? 
+              Math.round(((dashboardData.sbp.fact || 0) / dashboardData.sbp.plan) * 100) : 0,
+            'Остаток (руб)': Math.max(0, (dashboardData?.sbp?.plan || 0) - (dashboardData?.sbp?.fact || 0))
           }
         ]
       },
@@ -117,28 +138,28 @@ class ExportService {
         data: [
           {
             'Показатель': 'Общая выручка за сегодня',
-            'Сумма (руб)': todayStats.total || 0,
-            'Количество записей': todayStats.entries?.length || 0,
-            'Средний чек': todayStats.entries?.length > 0 ? 
-              Math.round(todayStats.total / todayStats.entries.length) : 0
+            'Сумма (руб)': todayStats?.total || 0,
+            'Количество записей': todayStats?.entries?.length || 0,
+            'Средний чек': todayStats?.entries?.length > 0 ? 
+              Math.round((todayStats.total || 0) / todayStats.entries.length) : 0
           }
         ]
       }
     ];
 
     // Добавляем детализацию по записям, если есть
-    if (todayStats.entries && todayStats.entries.length > 0) {
+    if (todayStats?.entries && todayStats.entries.length > 0) {
       sheets.push({
         name: 'Детализация записей',
         data: todayStats.entries.map((entry, index) => ({
           '№': index + 1,
-          'Сотрудник': entry.employeeName,
-          'Табельный номер': entry.employeeId,
+          'Сотрудник': entry.employeeName || 'Неизвестно',
+          'Табельный номер': entry.employeeId || 'Неизвестно',
           'Фокусные товары (руб)': parseInt(entry.focus) || 0,
           'СБП (руб)': parseInt(entry.sbp) || 0,
           'Наличные (руб)': parseInt(entry.cash) || 0,
           'Общая сумма (руб)': (parseInt(entry.focus) || 0) + (parseInt(entry.sbp) || 0) + (parseInt(entry.cash) || 0),
-          'Время внесения': new Date(entry.timestamp).toLocaleTimeString('ru-RU')
+          'Время внесения': entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString('ru-RU') : 'Неизвестно'
         }))
       });
     }
@@ -159,8 +180,8 @@ class ExportService {
           'СБП (руб)': parseInt(entry.sbp) || 0,
           'Наличные (руб)': parseInt(entry.cash) || 0,
           'Общая сумма (руб)': (parseInt(entry.focus) || 0) + (parseInt(entry.sbp) || 0) + (parseInt(entry.cash) || 0),
-          'Время внесения': new Date(entry.timestamp).toLocaleTimeString('ru-RU'),
-          'День недели': new Date(entry.date).toLocaleDateString('ru-RU', { weekday: 'long' })
+          'Время внесения': entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString('ru-RU') : 'Неизвестно',
+          'День недели': entry.date ? new Date(entry.date).toLocaleDateString('ru-RU', { weekday: 'long' }) : 'Неизвестно'
         }))
       }
     ];
@@ -168,6 +189,8 @@ class ExportService {
     // Добавляем сводку по дням
     const dailySummary = {};
     revenueEntries.forEach(entry => {
+      if (!entry.date) return;
+      
       if (!dailySummary[entry.date]) {
         dailySummary[entry.date] = {
           date: entry.date,
@@ -191,19 +214,21 @@ class ExportService {
         .sort((a, b) => new Date(a.date) - new Date(b.date))
         .map(day => ({
           'Дата': day.date,
-          'День недели': new Date(day.date).toLocaleDateString('ru-RU', { weekday: 'long' }),
+          'День недели': day.date ? new Date(day.date).toLocaleDateString('ru-RU', { weekday: 'long' }) : 'Неизвестно',
           'Общая выручка (руб)': day.total,
           'Фокусные товары (руб)': day.focus,
           'СБП (руб)': day.sbp,
           'Наличные (руб)': day.cash,
           'Количество записей': day.entries,
-          'Средний чек (руб)': Math.round(day.total / day.entries)
+          'Средний чек (руб)': day.entries > 0 ? Math.round(day.total / day.entries) : 0
         }))
     });
 
     // Добавляем сводку по сотрудникам
     const employeeSummary = {};
     revenueEntries.forEach(entry => {
+      if (!entry.employeeId) return;
+      
       if (!employeeSummary[entry.employeeId]) {
         employeeSummary[entry.employeeId] = {
           employeeId: entry.employeeId,
@@ -223,11 +248,13 @@ class ExportService {
       employeeSummary[entry.employeeId].cash += parseInt(entry.cash) || 0;
       employeeSummary[entry.employeeId].entries++;
       
-      if (new Date(entry.date) < new Date(employeeSummary[entry.employeeId].firstEntry)) {
-        employeeSummary[entry.employeeId].firstEntry = entry.date;
-      }
-      if (new Date(entry.date) > new Date(employeeSummary[entry.employeeId].lastEntry)) {
-        employeeSummary[entry.employeeId].lastEntry = entry.date;
+      if (entry.date) {
+        if (new Date(entry.date) < new Date(employeeSummary[entry.employeeId].firstEntry)) {
+          employeeSummary[entry.employeeId].firstEntry = entry.date;
+        }
+        if (new Date(entry.date) > new Date(employeeSummary[entry.employeeId].lastEntry)) {
+          employeeSummary[entry.employeeId].lastEntry = entry.date;
+        }
       }
     });
 
@@ -243,11 +270,11 @@ class ExportService {
           'СБП (руб)': emp.sbp,
           'Наличные (руб)': emp.cash,
           'Количество записей': emp.entries,
-          'Средний чек (руб)': Math.round(emp.total / emp.entries),
+          'Средний чек (руб)': emp.entries > 0 ? Math.round(emp.total / emp.entries) : 0,
           'Первый внос': emp.firstEntry,
           'Последний внос': emp.lastEntry,
-          'Доля фокусных (%)': Math.round((emp.focus / emp.total) * 100) || 0,
-          'Доля СБП (%)': Math.round((emp.sbp / emp.total) * 100) || 0
+          'Доля фокусных (%)': emp.total > 0 ? Math.round((emp.focus / emp.total) * 100) : 0,
+          'Доля СБП (%)': emp.total > 0 ? Math.round((emp.sbp / emp.total) * 100) : 0
         }))
     });
 
@@ -260,7 +287,7 @@ class ExportService {
 
   // Экспорт расширенной аналитики
   exportAdvancedAnalytics(analyticsData) {
-    const { summary, employeeStats, storeStats, dateRange } = analyticsData;
+    const { summary = {}, employeeStats = [], storeStats = [], dateRange = {} } = analyticsData;
     
     const sheets = [
       {
@@ -268,55 +295,59 @@ class ExportService {
         data: [
           {
             'Показатель': 'Общая выручка',
-            'Значение': summary.totalRevenue,
+            'Значение': summary.totalRevenue || 0,
             'Единица измерения': 'руб',
             'Описание': 'Суммарная выручка за период'
           },
           {
             'Показатель': 'Фокусные товары',
-            'Значение': summary.totalFocus,
+            'Значение': summary.totalFocus || 0,
             'Единица измерения': 'руб',
             'Описание': 'Выручка с фокусных товаров'
           },
           {
             'Показатель': 'СБП',
-            'Значение': summary.totalSBP,
+            'Значение': summary.totalSBP || 0,
             'Единица измерения': 'руб',
             'Описание': 'Выручка по системе быстрых платежей'
           },
           {
             'Показатель': 'Наличные',
-            'Значение': summary.totalCash,
+            'Значение': summary.totalCash || 0,
             'Единица измерения': 'руб',
             'Описание': 'Выручка наличными'
           },
           {
             'Показатель': 'Средняя выручка в день',
-            'Значение': Math.round(summary.averagePerDay),
+            'Значение': Math.round(summary.averagePerDay || 0),
             'Единица измерения': 'руб/день',
             'Описание': 'Среднедневная выручка'
           },
           {
             'Показатель': 'Выполнение плана',
-            'Значение': Math.round(summary.averagePlanCompletion),
+            'Значение': Math.round(summary.averagePlanCompletion || 0),
             'Единица измерения': '%',
             'Описание': 'Средний процент выполнения планов'
           },
           {
             'Показатель': 'Дней с данными',
-            'Значение': summary.daysWithData,
+            'Значение': summary.daysWithData || 0,
             'Единица измерения': 'дней',
             'Описание': 'Количество дней с внесенными данными'
           },
           {
             'Показатель': 'Всего записей',
-            'Значение': summary.entryCount,
+            'Значение': summary.entryCount || 0,
             'Единица измерения': 'записей',
             'Описание': 'Общее количество записей о выручке'
           }
         ]
-      },
-      {
+      }
+    ];
+
+    // Добавляем топ сотрудников, если есть
+    if (employeeStats.length > 0) {
+      sheets.push({
         name: 'Топ сотрудников',
         data: employeeStats.map((employee, index) => ({
           'Место': index + 1,
@@ -327,13 +358,13 @@ class ExportService {
           'СБП (руб)': employee.sbp,
           'Наличные (руб)': employee.cash,
           'Количество записей': employee.entries,
-          'Средний чек (руб)': Math.round(employee.total / employee.entries),
+          'Средний чек (руб)': employee.entries > 0 ? Math.round(employee.total / employee.entries) : 0,
           'Доля от общей выручки (%)': summary.totalRevenue > 0 ? 
             Math.round((employee.total / summary.totalRevenue) * 100) : 0,
-          'Магазины': employee.stores.join(', ')
+          'Магазины': Array.isArray(employee.stores) ? employee.stores.join(', ') : ''
         }))
-      }
-    ];
+      });
+    }
 
     // Добавляем статистику по магазинам, если есть
     if (storeStats && storeStats.length > 0) {
@@ -346,41 +377,14 @@ class ExportService {
           'СБП (руб)': store.sbp,
           'Наличные (руб)': store.cash,
           'Количество сотрудников': store.employeeCount,
-          'Средняя выручка на сотрудника (руб)': Math.round(store.averagePerEmployee),
+          'Средняя выручка на сотрудника (руб)': Math.round(store.averagePerEmployee || 0),
           'Доля от общей выручки (%)': summary.totalRevenue > 0 ? 
             Math.round((store.total / summary.totalRevenue) * 100) : 0
         }))
       });
     }
 
-    // Добавляем тренды и анализ
-    sheets.push({
-      name: 'Анализ эффективности',
-      data: [
-        {
-          'Метрика': 'Эффективность сотрудников',
-          'Значение': employeeStats.length > 0 ? Math.round(employeeStats[0].total / (employeeStats[employeeStats.length - 1]?.total || 1)) : 0,
-          'Описание': 'Соотношение выручки лучшего и худшего сотрудника'
-        },
-        {
-          'Метрика': 'Распределение выручки',
-          'Значение': Math.round((summary.totalFocus / summary.totalRevenue) * 100) || 0,
-          'Описание': 'Доля фокусных товаров в общей выручке (%)'
-        },
-        {
-          'Метрика': 'Проникновение СБП',
-          'Значение': Math.round((summary.totalSBP / summary.totalRevenue) * 100) || 0,
-          'Описание': 'Доля СБП в общей выручке (%)'
-        },
-        {
-          'Метрика': 'Стабильность работы',
-          'Значение': Math.round((summary.daysWithData / ((new Date(dateRange.end) - new Date(dateRange.start)) / (1000 * 60 * 60 * 24) + 1)) * 100),
-          'Описание': 'Процент дней с внесенными данными'
-        }
-      ]
-    });
-
-    const filename = `eps-advanced-analytics-${dateRange.start}-to-${dateRange.end}`;
+    const filename = `eps-advanced-analytics-${dateRange.start || 'start'}-to-${dateRange.end || 'end'}`;
     return this.exportToExcel(sheets, filename);
   }
 
@@ -389,13 +393,15 @@ class ExportService {
     const sheets = [];
 
     // Основные данные отчета
-    sheets.push({
-      name: reportConfig.name || 'Кастомный отчет',
-      data: reportData.main || []
-    });
+    if (reportData.main && Array.isArray(reportData.main)) {
+      sheets.push({
+        name: reportConfig.name || 'Кастомный отчет',
+        data: reportData.main
+      });
+    }
 
     // Сводные данные, если есть
-    if (reportData.summary) {
+    if (reportData.summary && Array.isArray(reportData.summary)) {
       sheets.push({
         name: 'Сводка',
         data: reportData.summary
@@ -403,7 +409,7 @@ class ExportService {
     }
 
     // Детализация, если есть
-    if (reportData.details) {
+    if (reportData.details && Array.isArray(reportData.details)) {
       sheets.push({
         name: 'Детализация',
         data: reportData.details
@@ -411,7 +417,7 @@ class ExportService {
     }
 
     // Метрики и KPI
-    if (reportData.metrics) {
+    if (reportData.metrics && Array.isArray(reportData.metrics)) {
       sheets.push({
         name: 'Ключевые метрики',
         data: reportData.metrics.map(metric => ({
@@ -430,112 +436,62 @@ class ExportService {
 
   // Экспорт всех данных системы
   exportAllData() {
-    const allData = JSON.parse(localStorage.getItem('eps-analytics-data') || '{}');
-    
-    const sheets = [];
+    try {
+      const allData = JSON.parse(localStorage.getItem('eps-analytics-data') || '{}');
+      
+      const sheets = [];
 
-    // Сотрудники
-    if (allData.employees && allData.employees.length > 0) {
-      sheets.push({
-        name: 'Сотрудники',
-        data: allData.employees.map(emp => ({
-          'ID': emp.id,
-          'Табельный номер': emp.employeeId,
-          'ФИО': emp.name,
-          'Телефон': emp.phone,
-          'Telegram': emp.telegram,
-          'Дата рождения': emp.birthDate,
-          'Должность': emp.role,
-          'Магазины': emp.stores.join(', '),
-          'Дата создания': new Date(emp.createdAt).toLocaleDateString('ru-RU')
-        }))
-      });
-    }
-
-    // Данные по выручке
-    const revenueData = [];
-    Object.entries(allData.revenueData || {}).forEach(([date, entries]) => {
-      entries.forEach(entry => {
-        revenueData.push({
-          'Дата': date,
-          'Табельный номер': entry.employeeId,
-          'Сотрудник': entry.employeeName,
-          'Фокусные товары': entry.focus,
-          'СБП': entry.sbp,
-          'Наличные': entry.cash,
-          'Общая сумма': (parseInt(entry.focus) || 0) + (parseInt(entry.sbp) || 0) + (parseInt(entry.cash) || 0),
-          'Время внесения': new Date(entry.timestamp).toLocaleString('ru-RU')
+      // Сотрудники
+      if (allData.employees && Array.isArray(allData.employees)) {
+        sheets.push({
+          name: 'Сотрудники',
+          data: allData.employees.map(emp => ({
+            'ID': emp.id,
+            'Табельный номер': emp.employeeId,
+            'ФИО': emp.name,
+            'Телефон': emp.phone,
+            'Telegram': emp.telegram,
+            'Дата рождения': emp.birthDate,
+            'Должность': emp.role,
+            'Магазины': Array.isArray(emp.stores) ? emp.stores.join(', ') : '',
+            'Дата создания': emp.createdAt ? new Date(emp.createdAt).toLocaleDateString('ru-RU') : 'Неизвестно'
+          }))
         });
-      });
-    });
+      }
 
-    if (revenueData.length > 0) {
-      sheets.push({
-        name: 'Данные выручки',
-        data: revenueData
-      });
-    }
-
-    // Планы
-    const plansData = [];
-    Object.entries(allData.plans || {}).forEach(([date, plan]) => {
-      plansData.push({
-        'Дата': date,
-        'План по выручке': plan.revenue,
-        'План по фокусным': plan.focus,
-        'План по СБП': plan.sbp,
-        'Общий план': plan.revenue + plan.focus + plan.sbp,
-        'Дата обновления': new Date(plan.updatedAt).toLocaleString('ru-RU')
-      });
-    });
-
-    if (plansData.length > 0) {
-      sheets.push({
-        name: 'Планы',
-        data: plansData
-      });
-    }
-
-    // График работы
-    const scheduleData = [];
-    Object.entries(allData.schedules || {}).forEach(([date, schedules]) => {
-      schedules.forEach(schedule => {
-        const employee = allData.employees.find(emp => emp.employeeId === schedule.employeeId);
-        scheduleData.push({
-          'Дата': date,
-          'Табельный номер': schedule.employeeId,
-          'Сотрудник': employee?.name || 'Неизвестно',
-          'Начало смены': schedule.startTime,
-          'Конец смены': schedule.endTime,
-          'Тип смены': schedule.type,
-          'Дата создания': new Date(schedule.createdAt).toLocaleString('ru-RU')
+      // Данные по выручке
+      const revenueData = [];
+      if (allData.revenueData && typeof allData.revenueData === 'object') {
+        Object.entries(allData.revenueData).forEach(([date, entries]) => {
+          if (Array.isArray(entries)) {
+            entries.forEach(entry => {
+              revenueData.push({
+                'Дата': date,
+                'Табельный номер': entry.employeeId,
+                'Сотрудник': entry.employeeName,
+                'Фокусные товары': entry.focus,
+                'СБП': entry.sbp,
+                'Наличные': entry.cash,
+                'Общая сумма': (parseInt(entry.focus) || 0) + (parseInt(entry.sbp) || 0) + (parseInt(entry.cash) || 0),
+                'Время внесения': entry.timestamp ? new Date(entry.timestamp).toLocaleString('ru-RU') : 'Неизвестно'
+              });
+            });
+          }
         });
-      });
-    });
+      }
 
-    if (scheduleData.length > 0) {
-      sheets.push({
-        name: 'График работы',
-        data: scheduleData
-      });
+      if (revenueData.length > 0) {
+        sheets.push({
+          name: 'Данные выручки',
+          data: revenueData
+        });
+      }
+
+      return this.exportToExcel(sheets, 'eps-full-backup');
+    } catch (error) {
+      console.error('Ошибка экспорта всех данных:', error);
+      return false;
     }
-
-    // Системная информация
-    sheets.push({
-      name: 'Системная информация',
-      data: [
-        {
-          'Версия данных': allData.version || '1.0.0',
-          'Последнее обновление': new Date(allData.lastUpdated).toLocaleString('ru-RU'),
-          'Количество сотрудников': allData.employees?.length || 0,
-          'Количество дней с данными': Object.keys(allData.revenueData || {}).length,
-          'Количество планов': Object.keys(allData.plans || {}).length,
-          'Количество записей в графике': Object.keys(allData.schedules || {}).length
-        }
-      ]
-    });
-
-    return this.exportToExcel(sheets, 'eps-full-backup');
   }
 
   // Экспорт мотивационных данных
@@ -546,7 +502,7 @@ class ExportService {
       const sheets = [];
 
       // Достижения сотрудников
-      if (motivationData.achievements && motivationData.achievements.length > 0) {
+      if (motivationData.achievements && Array.isArray(motivationData.achievements)) {
         sheets.push({
           name: 'Достижения',
           data: motivationData.achievements.map(achievement => ({
@@ -558,13 +514,13 @@ class ExportService {
             'Выполнение (%)': achievement.percentage,
             'Начислено баллов': achievement.points,
             'Дата достижения': achievement.date,
-            'Время записи': new Date(achievement.timestamp).toLocaleString('ru-RU')
+            'Время записи': achievement.timestamp ? new Date(achievement.timestamp).toLocaleString('ru-RU') : 'Неизвестно'
           }))
         });
       }
 
       // Статистика сотрудников
-      if (motivationData.employees) {
+      if (motivationData.employees && typeof motivationData.employees === 'object') {
         const employeesData = Object.entries(motivationData.employees).map(([employeeId, stats]) => ({
           'Табельный номер': employeeId,
           'Всего баллов': stats.totalPoints,
@@ -579,29 +535,6 @@ class ExportService {
           });
         }
       }
-
-      // Настройки системы
-      sheets.push({
-        name: 'Настройки мотивации',
-        data: [
-          {
-            'Параметр': 'Баллов за выполнение плана',
-            'Значение': motivationData.settings?.pointsPerPlan || 10
-          },
-          {
-            'Параметр': 'Бонус за перевыполнение',
-            'Значение': motivationData.settings?.bonusForOverachievement || 5
-          },
-          {
-            'Параметр': 'Месячный бонус',
-            'Значение': motivationData.settings?.monthlyBonus || 100
-          },
-          {
-            'Параметр': 'Версия системы мотивации',
-            'Значение': motivationData.version || '1.0.0'
-          }
-        ]
-      });
 
       return this.exportToExcel(sheets, 'eps-motivation-data');
     } catch (error) {
@@ -640,6 +573,15 @@ class ExportService {
           'СБП': 3000,
           'Наличные': 2000
         }
+      ],
+      schedule: [
+        {
+          'Дата': '2024-10-01',
+          'Табельный номер': '12345',
+          'Начало смены': '09:00',
+          'Конец смены': '18:00',
+          'Тип смены': 'work'
+        }
       ]
     };
 
@@ -662,11 +604,11 @@ class ExportService {
   }
 
   formatDate(date) {
-    return new Date(date).toLocaleDateString('ru-RU');
+    return date ? new Date(date).toLocaleDateString('ru-RU') : 'Неизвестно';
   }
 
   formatDateTime(date) {
-    return new Date(date).toLocaleString('ru-RU');
+    return date ? new Date(date).toLocaleString('ru-RU') : 'Неизвестно';
   }
 
   // Получение статистики экспорта

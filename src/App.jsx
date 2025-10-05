@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import SidebarNavigation from './components/layout/SidebarNavigation';
@@ -47,7 +46,7 @@ function AppContent() {
   return (
     <Router>
       <div className="app-container">
-        {/* Хедер всегда на верху */}
+        {/* Верхний хедер восстановлен */}
         <Header />
 
         <div className="main-layout">

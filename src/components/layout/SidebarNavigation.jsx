@@ -53,7 +53,7 @@ const SidebarNavigation = ({ userData, onLogout }) => {
 
   return (
     <nav className="sidebar bg-gray-900 border-r border-gray-800 flex flex-col h-full">
-      {/* Заголовок - упрощенный */}
+      {/* ЗАГОЛОВОК ВОССТАНОВЛЕН */}
       <div className="p-4 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
@@ -65,9 +65,9 @@ const SidebarNavigation = ({ userData, onLogout }) => {
         </div>
       </div>
 
-      {/* Навигация - занимает все доступное пространство */}
+      {/* Навигация */}
       <div className="flex-grow overflow-y-auto py-4">
-        <div className="space-y-3 px-3"> {/* Увеличил отступы между кнопками */}
+        <div className="space-y-3 px-3">
           {navigationItems.map((item, index) => {
             if (item.type === 'divider') {
               return (
@@ -85,7 +85,7 @@ const SidebarNavigation = ({ userData, onLogout }) => {
                     ? 'bg-purple-600 text-white shadow-lg border border-purple-400'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800'
                 }`}
-                style={{ textAlign: 'left' }} // Явное выравнивание по левому краю
+                style={{ textAlign: 'left' }}
               >
                 <Icon className={`h-5 w-5 mr-3 flex-shrink-0 ${
                   isActive(item.href) ? 'text-white' : 'text-gray-400'

@@ -78,7 +78,7 @@ header {
   display: flex;
   flex: 1;
   position: relative;
-  margin-top: var(--header-height);
+  margin-top: 0;
 }
 
 /* 🧭 Навигация - Сайдбар */
@@ -586,68 +586,4 @@ button:active::after, .btn:active::after {
 
 .animate-scale-in {
   animation: scale-in 0.2s ease-out;
-}
-.input-field:focus {
-  outline: none;
-  border-color: rgba(139, 92, 246, 0.5);
-  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
-  background: rgba(55, 65, 81, 1);
-}
-
-/* Стили для скроллбара в выпадающих списках */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(75, 85, 99, 0.3);
-  border-radius: 3px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(139, 92, 246, 0.5);
-  border-radius: 3px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(139, 92, 246, 0.7);
-}
-
-/* Анимации для модальных окон */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.2s ease-out;
-}
-
-.animate-scale-in {
-  animation: scale-in 0.2s ease-out;
-}
-
-/* Убираем стандартные стрелки у input type=date */
-input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.6);
-  cursor: pointer;
-}
-
-input[type="date"]::-webkit-calendar-picker-indicator:hover {
-  filter: invert(0.8);
 }
