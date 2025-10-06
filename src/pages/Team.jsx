@@ -1,9 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, Mail, Phone, Calendar, Store, Shield, Edit, Trash2, Download, Upload, User, Save, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Users, Plus, Search, Mail, Phone, Calendar, Store, Shield, Edit, Trash2, Download, Upload, User, Save } from 'lucide-react';
 import { dataService } from '../services/dataService';
 import { exportService } from '../services/exportService';
 import { useNotifications } from '../contexts/NotificationContext';
 import Modal from '../components/ui/Modal';
+import EmployeeForm from '../components/EmployeeForm';
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
+import { employeesData } from '../data/employees';
+
+// Список доступных магазинов (вынесен из компонента для предотвращения пересоздания)
+const availableStores = [
+  'ЕРС 2334',
+  'ЕРС 2312', 
+];
 
 const Team = ({ userData }) => {
   const [employees, setEmployees] = useState([]);
@@ -11,7 +21,6 @@ const Team = ({ userData }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [importData, setImportData] = useState('');
   const [currentEmployee, setCurrentEmployee] = useState(null);
   const [employeeForm, setEmployeeForm] = useState({
     name: '',
@@ -25,18 +34,6 @@ const Team = ({ userData }) => {
   });
   const [showStoresDropdown, setShowStoresDropdown] = useState(false);
   const { addNotification } = useNotifications();
-
-  // Список доступных магазинов
-  const availableStores = [
-    'ЕРС 2334',
-    'ЕРС 2312', 
-    'ЕРС 2456',
-    'ЕРС 2501',
-    'ЕРС 2678',
-    'ЕРС 2890',
-    'ЕРС 3123',
-    'ЕРС 3345'
-  ];
 
   // Загрузка сотрудников и подписка на изменения данных
   useEffect(() => {
@@ -94,6 +91,18 @@ const Team = ({ userData }) => {
     setCurrentEmployee(null);
     setShowStoresDropdown(false);
   };
+
+  // Оптимизированная функция toggleStore с useCallback
+  const toggleStore = useCallback((store) => {
+    setEmployeeForm(prev => {
+      const currentStores = [...prev.stores];
+      if (currentStores.includes(store)) {
+        return { ...prev, stores: currentStores.filter(s => s !== store) };
+      } else {
+        return { ...prev, stores: [...currentStores, store] };
+      }
+    });
+  }, []);
 
   const handleAddEmployee = () => {
     if (!employeeForm.name.trim() || !employeeForm.employeeId.trim()) {
@@ -209,7 +218,7 @@ const Team = ({ userData }) => {
       'Дата создания': new Date(employee.createdAt).toLocaleDateString('ru-RU')
     }));
 
-    exportService.exportToExcel(exportData, 'eps-employees');
+    exportService.exportToExcel([{ name: 'Сотрудники', data: exportData }], 'eps-employees');
     addNotification({
       type: 'success',
       title: 'Экспорт завершен',
@@ -217,10 +226,71 @@ const Team = ({ userData }) => {
     });
   };
 
-  const handleImport = () => {
+  // Новая функция для обработки загрузки файлов
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const data = e.target.result;
+        let parsedData = [];
+
+        if (file.name.endsWith('.csv')) {
+          // Обработка CSV файлов
+          const results = Papa.parse(data, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (result) => {
+              if (result.errors.length > 0) {
+                throw new Error(`Ошибка парсинга CSV: ${result.errors[0].message}`);
+              }
+              return result.data;
+            }
+          });
+          parsedData = results.data;
+        } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+          // Обработка Excel файлов
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          parsedData = XLSX.utils.sheet_to_json(worksheet);
+        } else {
+          throw new Error('Неподдерживаемый формат файла. Используйте CSV или Excel.');
+        }
+
+        if (!parsedData || parsedData.length === 0) {
+          throw new Error('Файл не содержит данных или имеет неправильный формат');
+        }
+
+        // Импорт данных
+        handleImport(parsedData);
+        
+      } catch (error) {
+        addNotification({
+          type: 'error',
+          title: 'Ошибка чтения файла',
+          message: error.message
+        });
+      }
+    };
+
+    // Чтение файла в правильном формате
+    if (file.name.endsWith('.csv')) {
+      reader.readAsText(file);
+    } else {
+      reader.readAsBinaryString(file);
+    }
+
+    // Сброс значения input для возможности повторной загрузки того же файла
+    event.target.value = '';
+  };
+
+  // Обновленная функция импорта для работы с массивами объектов
+  const handleImport = (parsedData) => {
     try {
-      const parsedData = JSON.parse(importData);
-      
       if (!Array.isArray(parsedData)) {
         throw new Error('Данные должны быть массивом');
       }
@@ -229,22 +299,42 @@ const Team = ({ userData }) => {
       if (!allData) return;
 
       let addedCount = 0;
+      let updatedCount = 0;
+
       parsedData.forEach(newEmployee => {
-        const exists = allData.employees.some(emp => emp.employeeId === newEmployee.employeeId);
-        if (!exists) {
+        // Нормализация данных из файла
+        const normalizedEmployee = {
+          name: newEmployee.name || newEmployee['ФИО'] || newEmployee['ФИО сотрудника'] || 'Новый сотрудник',
+          employeeId: newEmployee.employeeId || newEmployee['Табельный номер'] || newEmployee['Табельный'] || Date.now().toString(),
+          phone: newEmployee.phone || newEmployee['Телефон'] || newEmployee['Номер телефона'] || 'Не указан',
+          email: newEmployee.email || newEmployee['Email'] || newEmployee['Почта'] || 'Не указан',
+          telegram: newEmployee.telegram || newEmployee['Telegram'] || newEmployee['Телеграм'] || 'Не указан',
+          birthDate: newEmployee.birthDate || newEmployee['Дата рождения'] || newEmployee['ДР'] || 'Не указана',
+          role: newEmployee.role || newEmployee['Должность'] || newEmployee['Роль'] || 'Сотрудник',
+          stores: Array.isArray(newEmployee.stores) ? newEmployee.stores : 
+                  (newEmployee.stores ? newEmployee.stores.split(',').map(s => s.trim()) : 
+                  (newEmployee['Магазины'] ? newEmployee['Магазины'].split(',').map(s => s.trim()) : ['ЕРС 2334']))
+        };
+
+        const existsIndex = allData.employees.findIndex(emp => 
+          emp.employeeId === normalizedEmployee.employeeId
+        );
+
+        if (existsIndex >= 0) {
+          // Обновление существующего сотрудника
+          allData.employees[existsIndex] = {
+            ...allData.employees[existsIndex],
+            ...normalizedEmployee
+          };
+          updatedCount++;
+        } else {
+          // Добавление нового сотрудника
           allData.employees.push({
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            name: newEmployee.name || 'Новый сотрудник',
-            employeeId: newEmployee.employeeId || Date.now().toString(),
-            phone: newEmployee.phone || 'Не указан',
-            email: newEmployee.email || 'Не указан',
-            telegram: newEmployee.telegram || 'Не указан',
-            birthDate: newEmployee.birthDate || 'Не указана',
-            stores: Array.isArray(newEmployee.stores) ? newEmployee.stores : ['ЕРС 2334'],
-            role: newEmployee.role || 'Сотрудник',
-            position: newEmployee.position || 'Продавец-консультант',
-            department: newEmployee.department || 'Продажи',
-            hireDate: newEmployee.hireDate || '15.01.2024',
+            ...normalizedEmployee,
+            position: newEmployee.position || newEmployee['Позиция'] || 'Продавец-консультант',
+            department: newEmployee.department || newEmployee['Отдел'] || 'Продажи',
+            hireDate: newEmployee.hireDate || newEmployee['Дата найма'] || '15.01.2024',
             createdAt: new Date().toISOString()
           });
           addedCount++;
@@ -257,30 +347,24 @@ const Team = ({ userData }) => {
         addNotification({
           type: 'success',
           title: 'Импорт завершен',
-          message: `Добавлено ${addedCount} сотрудников`
+          message: `Добавлено ${addedCount} сотрудников, обновлено ${updatedCount} сотрудников`
         });
         setIsImportModalOpen(false);
-        setImportData('');
         // loadEmployees() вызовется автоматически через подписку
+      } else {
+        addNotification({
+          type: 'error',
+          title: 'Ошибка импорта',
+          message: 'Не удалось сохранить импортированные данные'
+        });
       }
     } catch (error) {
       addNotification({
         type: 'error',
         title: 'Ошибка импорта',
-        message: 'Неверный формат данных. Используйте JSON массив.'
+        message: error.message
       });
     }
-  };
-
-  const toggleStore = (store) => {
-    setEmployeeForm(prev => {
-      const currentStores = [...prev.stores];
-      if (currentStores.includes(store)) {
-        return { ...prev, stores: currentStores.filter(s => s !== store) };
-      } else {
-        return { ...prev, stores: [...currentStores, store] };
-      }
-    });
   };
 
   const filteredEmployees = employees.filter(employee =>
@@ -299,187 +383,6 @@ const Team = ({ userData }) => {
     };
     return colors[role] || 'bg-gray-500/20 text-gray-400 border-gray-500/30';
   };
-
-  const EmployeeFormFields = () => (
-    <div className="space-y-6">
-      {/* ФИО */}
-      <div className="flex items-center justify-between space-x-4">
-        <label className="form-label flex items-center text-lg font-medium text-white min-w-[200px]">
-          <User className="h-5 w-5 mr-3 text-blue-400" />
-          ФИО *
-        </label>
-        <div className="flex-1">
-          <input
-            type="text"
-            value={employeeForm.name}
-            onChange={(e) => setEmployeeForm(prev => ({ ...prev, name: e.target.value }))}
-            className="input-field text-lg bg-gray-750 border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            placeholder="Иванов Иван Иванович"
-          />
-        </div>
-      </div>
-
-      {/* Табельный номер */}
-      <div className="flex items-center justify-between space-x-4">
-        <label className="form-label flex items-center text-lg font-medium text-white min-w-[200px]">
-          <Shield className="h-5 w-5 mr-3 text-purple-400" />
-          Табельный номер *
-        </label>
-        <div className="flex-1">
-          <input
-            type="text"
-            value={employeeForm.employeeId}
-            onChange={(e) => setEmployeeForm(prev => ({ ...prev, employeeId: e.target.value }))}
-            className="input-field text-lg font-mono bg-gray-750 border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-            placeholder="12345"
-          />
-        </div>
-      </div>
-
-      {/* Телефон и Email */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="flex items-center justify-between space-x-4">
-          <label className="form-label flex items-center text-lg font-medium text-white min-w-[120px]">
-            <Phone className="h-5 w-5 mr-3 text-green-400" />
-            Телефон
-          </label>
-          <div className="flex-1">
-            <input
-              type="tel"
-              value={employeeForm.phone}
-              onChange={(e) => setEmployeeForm(prev => ({ ...prev, phone: e.target.value }))}
-              className="input-field bg-gray-750 border-gray-600 focus:border-green-500 focus:ring-2 focus:ring-green-500/20"
-              placeholder="+7 (999) 123-45-67"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between space-x-4">
-          <label className="form-label flex items-center text-lg font-medium text-white min-w-[120px]">
-            <Mail className="h-5 w-5 mr-3 text-orange-400" />
-            Email
-          </label>
-          <div className="flex-1">
-            <input
-              type="email"
-              value={employeeForm.email}
-              onChange={(e) => setEmployeeForm(prev => ({ ...prev, email: e.target.value }))}
-              className="input-field bg-gray-750 border-gray-600 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
-              placeholder="employee@epc.ru"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Telegram и Дата рождения */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="flex items-center justify-between space-x-4">
-          <label className="form-label flex items-center text-lg font-medium text-white min-w-[120px]">
-            <Mail className="h-5 w-5 mr-3 text-blue-400" />
-            Telegram
-          </label>
-          <div className="flex-1">
-            <input
-              type="text"
-              value={employeeForm.telegram}
-              onChange={(e) => setEmployeeForm(prev => ({ ...prev, telegram: e.target.value }))}
-              className="input-field bg-gray-750 border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              placeholder="@username"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between space-x-4">
-          <label className="form-label flex items-center text-lg font-medium text-white min-w-[120px]">
-            <Calendar className="h-5 w-5 mr-3 text-yellow-400" />
-            Дата рождения
-          </label>
-          <div className="flex-1">
-            <div className="flex space-x-3">
-              <input
-                type="date"
-                value={employeeForm.birthDate}
-                onChange={(e) => setEmployeeForm(prev => ({ ...prev, birthDate: e.target.value }))}
-                className="input-field bg-gray-750 border-gray-600 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 flex-1"
-              />
-              <input
-                type="text"
-                value={employeeForm.birthDate}
-                onChange={(e) => setEmployeeForm(prev => ({ ...prev, birthDate: e.target.value }))}
-                className="input-field bg-gray-750 border-gray-600 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-500/20 flex-1"
-                placeholder="ДД.ММ.ГГГГ или выберите дату"
-              />
-            </div>
-            <div className="text-sm text-gray-400 mt-2">
-              Можно ввести дату вручную или выбрать из календаря
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Должность */}
-      <div className="flex items-center justify-between space-x-4">
-        <label className="form-label flex items-center text-lg font-medium text-white min-w-[200px]">
-          <Shield className="h-5 w-5 mr-3 text-red-400" />
-          Должность
-        </label>
-        <div className="flex-1">
-          <select
-            value={employeeForm.role}
-            onChange={(e) => setEmployeeForm(prev => ({ ...prev, role: e.target.value }))}
-            className="input-field bg-gray-750 border-gray-600 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
-          >
-            <option value="Сотрудник">Сотрудник</option>
-            <option value="ЗДМ">ЗДМ</option>
-            <option value="ДТК">ДТК</option>
-            <option value="Админ">Админ</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Магазины */}
-      <div className="flex items-start justify-between space-x-4">
-        <label className="form-label flex items-center text-lg font-medium text-white min-w-[200px]">
-          <Store className="h-5 w-5 mr-3 text-emerald-400" />
-          Магазины
-        </label>
-        <div className="flex-1 relative">
-          <div 
-            className="input-field bg-gray-750 border-gray-600 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 cursor-pointer flex justify-between items-center"
-            onClick={() => setShowStoresDropdown(!showStoresDropdown)}
-          >
-            <span className={employeeForm.stores.length === 0 ? 'text-gray-500' : 'text-white'}>
-              {employeeForm.stores.length === 0 ? 'Выберите магазины' : employeeForm.stores.join(', ')}
-            </span>
-            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showStoresDropdown ? 'rotate-180' : ''}`} />
-          </div>
-          
-          {showStoresDropdown && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-gray-750 border border-gray-600 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-              {availableStores.map(store => (
-                <label 
-                  key={store}
-                  className="flex items-center space-x-3 p-3 hover:bg-gray-700 cursor-pointer border-b border-gray-600 last:border-b-0"
-                >
-                  <input
-                    type="checkbox"
-                    checked={employeeForm.stores.includes(store)}
-                    onChange={() => toggleStore(store)}
-                    className="rounded border-gray-600 bg-gray-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-gray-800"
-                  />
-                  <span className="text-white text-sm flex-1">{store}</span>
-                </label>
-              ))}
-            </div>
-          )}
-          
-          <div className="text-sm text-gray-400 mt-2">
-            Выбрано: {employeeForm.stores.length} магазинов
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-gray-900 p-4">
@@ -652,7 +555,14 @@ const Team = ({ userData }) => {
           title="Добавить сотрудника"
           size="lg"
         >
-          <EmployeeFormFields />
+          <EmployeeForm
+            employeeForm={employeeForm}
+            onFormChange={setEmployeeForm}
+            showStoresDropdown={showStoresDropdown}
+            onToggleStoresDropdown={() => setShowStoresDropdown(!showStoresDropdown)}
+            availableStores={availableStores}
+            onToggleStore={toggleStore}
+          />
           <div className="flex space-x-3 mt-8 pt-6 border-t border-gray-700">
             <button
               onClick={closeModals}
@@ -677,7 +587,14 @@ const Team = ({ userData }) => {
           title="Редактировать сотрудника"
           size="lg"
         >
-          <EmployeeFormFields />
+          <EmployeeForm
+            employeeForm={employeeForm}
+            onFormChange={setEmployeeForm}
+            showStoresDropdown={showStoresDropdown}
+            onToggleStoresDropdown={() => setShowStoresDropdown(!showStoresDropdown)}
+            availableStores={availableStores}
+            onToggleStore={toggleStore}
+          />
           <div className="flex space-x-3 mt-8 pt-6 border-t border-gray-700">
             <button
               onClick={closeModals}
@@ -705,30 +622,37 @@ const Team = ({ userData }) => {
           <div className="space-y-6">
             <div>
               <label className="form-label text-lg font-medium text-white mb-3">
-                Данные в формате JSON
+                Загрузите файл (CSV или Excel)
               </label>
-              <textarea
-                value={importData}
-                onChange={(e) => setImportData(e.target.value)}
-                className="input-field h-48 resize-none font-mono text-sm bg-gray-750 border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                placeholder={`[
-  {
-    "name": "Иванов Иван",
-    "employeeId": "12349",
-    "phone": "+7 (999) 123-45-67",
-    "email": "ivanov@epc.ru",
-    "telegram": "@ivanov",
-    "birthDate": "15.03.1990",
-    "role": "Сотрудник",
-    "stores": ["ЕРС 2334"]
-  }
-]`}
+              <input
+                type="file"
+                accept=".csv, .xlsx, .xls"
+                onChange={handleFileUpload}
+                className="input-field bg-gray-750 border-gray-600 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
               />
             </div>
             
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-              <p className="text-blue-400 text-sm">
-                Формат данных: JSON массив объектов с полями: name, employeeId, phone, email, telegram, birthDate, role, stores
+              <h4 className="text-blue-400 font-medium mb-2">Поддерживаемые форматы:</h4>
+              <ul className="text-blue-300 text-sm list-disc list-inside space-y-1">
+                <li>CSV файлы (.csv)</li>
+                <li>Excel файлы (.xlsx, .xls)</li>
+              </ul>
+            </div>
+
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
+              <h4 className="text-green-400 font-medium mb-2">Ожидаемые поля в файле:</h4>
+              <ul className="text-green-300 text-sm list-disc list-inside space-y-1">
+                <li><strong>Обязательные:</strong> name (ФИО), employeeId (Табельный номер)</li>
+                <li><strong>Дополнительные:</strong> phone, email, telegram, birthDate, role, stores</li>
+                <li><strong>Магазины:</strong> через запятую, например: "ЕРС 2334, ЕРС 2312"</li>
+              </ul>
+            </div>
+
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+              <p className="text-yellow-400 text-sm">
+                <strong>Примечание:</strong> Если сотрудник с таким табельным номером уже существует, 
+                его данные будут обновлены. Новые сотрудники будут добавлены в систему.
               </p>
             </div>
           </div>
@@ -738,15 +662,7 @@ const Team = ({ userData }) => {
               onClick={closeModals}
               className="flex-1 btn-secondary py-3 rounded-xl"
             >
-              Отмена
-            </button>
-            <button
-              onClick={handleImport}
-              disabled={!importData.trim()}
-              className="flex-1 btn-primary flex items-center justify-center py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Импортировать
+              Закрыть
             </button>
           </div>
         </Modal>

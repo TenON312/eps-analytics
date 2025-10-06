@@ -296,11 +296,11 @@ class DataService {
       ...updatedData
     };
 
-    // СОЗДАЕМ НОВЫЙ ОБЪЕКТ ДАННЫХ
-    const newData = {
+    // ИСПРАВЛЕНИЕ: Сохраняем правильную структуру данных
+    const success = this.saveData({
       ...allData,
       employees: updatedEmployees
-    };
+    });
 
     console.log('🔄 Обновление сотрудника:', {
       employeeId,
@@ -308,7 +308,7 @@ class DataService {
       result: updatedEmployees[employeeIndex]
     });
 
-    return this.saveData(newData);
+    return success;
   }
 
   /**

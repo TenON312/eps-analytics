@@ -1,16 +1,27 @@
 import React, { useState } from 'react';
 import { LogIn, Store, User } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
-const Login = ({ onLogin }) => {
+const Login = () => {
   const [employeeId, setEmployeeId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const { login } = useAuth();
 
-  // Тестовые данные сотрудников (временные)
+  // Тестовые данные сотрудников
   const mockEmployees = {
     '12345': {
       name: 'Иванов Иван Иванович',
       employeeId: '12345',
+      phone: '+7 (999) 123-45-67',
+      telegram: '@ivanov',
+      birthDate: '15.03.1990',
+      stores: ['ЕРС 2334'],
+      role: 'Сотрудник'
+    },
+    '312712': {
+      name: 'Иванов Вадим Михайлович',
+      employeeId: '312712',
       phone: '+7 (999) 123-45-67',
       telegram: '@ivanov',
       birthDate: '15.03.1990',
@@ -53,18 +64,9 @@ const Login = ({ onLogin }) => {
       
       const employeeData = mockEmployees[employeeId];
       if (employeeData) {
-        onLogin(employeeData);
+        login(employeeData);
       } else {
-        // Если сотрудник не найден, создаем временного
-        onLogin({
-          name: `Сотрудник ${employeeId}`,
-          employeeId: employeeId,
-          phone: 'Не указан',
-          telegram: 'Не указан',
-          birthDate: 'Не указана',
-          stores: ['ЕРС 2334'],
-          role: 'Сотрудник'
-        });
+        setError('Табельный номер не найден');
       }
     } catch (err) {
       setError('Ошибка входа. Проверьте табельный номер');
@@ -128,9 +130,6 @@ const Login = ({ onLogin }) => {
         </form>
 
         {/* Информация для тестирования */}
-        <div className="text-center text-gray-500 text-sm">
-          <p>Тестовые номера: 12345, 12346, 12347</p>
-        </div>
       </div>
     </div>
   );
